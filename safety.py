@@ -1,11 +1,6 @@
-"""
-Production safety and control mechanisms
-Implements emergency stop, manual mode, crisis mode
-"""
-
 from enum import Enum
 from datetime import datetime
-from typing import Dict
+from typing import Dict, List
 import threading
 import json
 
@@ -26,7 +21,7 @@ class SafetyController:
         
         # Safety thresholds
         self.thresholds = {
-            "max_auto_approvals_per_hour": 0,  # 0 = always manual
+            "max_auto_approvals_per_hour": 0,
             "min_approval_time_seconds": 60,
             "content_sensitivity_threshold": 0.8,
             "max_posts_per_hour": 10
@@ -81,13 +76,12 @@ class SafetyController:
                 self.mode = mode_map[mode_str]
                 self._log_event("mode_change", f"Changed to {mode_str}")
     
-    def activate_crisis_mode(self, crisis_type: str = "generic"):
+    def activate_crisis_mode(self, crisis_type: str = "generic") -> Dict:
         """Activate crisis mode - emergency shutdown"""
         
         with self.lock:
             self.mode = SystemMode.CRISIS_MODE
             
-            # Execute crisis protocol
             actions = [
                 "Paused all scheduled posts",
                 "Disabled automatic content generation",
@@ -119,7 +113,6 @@ class SafetyController:
         
         issues = []
         
-        # Check for alarming keywords
         alarm_words = ["emergency", "urgent", "crisis", "breaking", 
                       "alert", "immediately", "warning"]
         
@@ -128,13 +121,11 @@ class SafetyController:
             if word in content_lower:
                 issues.append(f"Contains alarming word: '{word}'")
         
-        # Check length
         if len(content) < 20:
             issues.append("Content too short")
         elif len(content) > 5000:
             issues.append("Content too long")
         
-        # Calculate safety score
         safety_score = max(0, 100 - (len(issues) * 20))
         
         return {
@@ -174,7 +165,6 @@ class SafetyController:
         
         self.audit_log.append(log_entry)
         
-        # Persist to file
         with open("safety_audit.log", "a") as f:
             f.write(json.dumps(log_entry) + "\n")
     
