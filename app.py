@@ -43,7 +43,7 @@ def init_system():
     safety = SafetyController()
     workflow = ApprovalWorkflow(db)
     scheduler = PostingScheduler(db)
-    agent = ContentAgent(api_key=st.secrets.get("GROK_API_KEY"))
+    agent = ContentAgent(api_key=st.secrets.get("xai-tjxmN6LNyWbLPjC4d4BuJFxuEmLvghS55XXX6yPmjJRbZkL3v4Nc0fC4JBWqdXQyUljsdNzoOwxhBoRe"))
     
     return {
         "brand": brand_voice,
