@@ -5,6 +5,7 @@ Implements emergency stop, manual mode, crisis mode
 
 from enum import Enum
 from datetime import datetime
+from typing import Dict
 import threading
 import json
 
