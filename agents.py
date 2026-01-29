@@ -85,8 +85,8 @@ class ContentAgent:
             raise Exception(f"API Generation Failed: {str(e)}. Check your GROQ_API_KEY and internet connection.")
     
     def _build_complete_prompt(self, platform: str, topic: str, brand_voice: BrandVoice,
-                              tone: Optional[str], include_hashtags: bool,
-                              include_question: bool, call_to_action: str) -> str:
+                          tone: Optional[str], include_hashtags: bool,
+                          include_question: bool, call_to_action: str) -> str:
         """Build comprehensive prompt with ALL parameters"""
         
         # Platform-specific instructions
@@ -99,27 +99,38 @@ class ContentAgent:
         
         platform_guide = platform_guides.get(platform, "Professional social media post")
         
+        # CRITICAL: Use actual brand_voice parameters from UI
+        company_name = brand_voice.company_name
+        brand_tone = tone or brand_voice.tone
+        audience = brand_voice.target_audience
+        personality = ', '.join(brand_voice.personality_traits)
+        content_focus = ', '.join(brand_voice.content_pillars)
+        avoid_topics = ', '.join(brand_voice.forbidden_topics)
+        
         # Build prompt parts
         prompt_parts = [
             f"Create a {platform} social media post about: {topic}",
             "",
             "=== COMPANY BRAND VOICE ===",
-            f"Company Name: {brand_voice.company_name}",
-            f"Brand Tone: {tone or brand_voice.tone}",
-            f"Personality Traits: {', '.join(brand_voice.personality_traits)}",
-            f"Target Audience: {brand_voice.target_audience}",
-            f"Content Focus Areas: {', '.join(brand_voice.content_pillars)}",
-            f"Avoid These Topics: {', '.join(brand_voice.forbidden_topics)}",
+            f"Company Name: {company_name} (USE THIS NAME IN THE POST)",
+            f"Brand Tone: {brand_tone} (WRITE IN THIS EXACT TONE)",
+            f"Personality Traits: {personality}",
+            f"Target Audience: {audience} (ADDRESS THIS AUDIENCE)",
+            f"Content Focus Areas: {content_focus}",
+            f"Avoid These Topics: {avoid_topics}",
             "",
             f"=== PLATFORM REQUIREMENTS ===",
             f"Platform: {platform}",
             f"Style: {platform_guide}",
             "",
-            "=== CONTENT REQUIREMENTS ===",
-            "1. Write in the exact brand tone specified above",
-            "2. Address the target audience directly",
-            "3. Include specific, actionable insights (not generic statements)",
-            "4. Sound like a real expert in this field",
+            "=== CRITICAL INSTRUCTIONS ===",
+            f"1. MUST mention '{company_name}' naturally in the post",
+            f"2. Write in a {brand_tone} tone throughout",
+            f"3. Address {audience} specifically",
+            f"4. Sound like the company has personality: {personality}",
+            f"5. Never mention: {avoid_topics}",
+            "6. Include specific, actionable insights (not generic statements)",
+            "7. Sound like a real expert in this field",
             "",
             "=== FORMATTING ===",
             "Use appropriate line breaks and formatting for the platform.",
@@ -129,12 +140,12 @@ class ContentAgent:
             "",
             "=== CRITICAL INSTRUCTIONS ===",
             "DO NOT use placeholder text like 'Key insight 1' or generic statements",
-            "DO reference the company name naturally in the content",
+            f"DO reference '{company_name}' naturally in the content",
             "DO adapt the tone exactly as specified",
             "DO provide specific insights about the topic",
             "DO format it ready-to-post on the specified platform",
             "",
-            "Now create the post:"
+            f"Now create a {platform} post for {company_name}:"
         ]
         
         return "\n".join(prompt_parts)
