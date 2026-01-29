@@ -275,15 +275,17 @@ with tab1:
                         st.session_state.current_content_id = content_id
                         
                         # Show generated content
-                        st.success(" AI Content Generated!")
+                        st.success("AI Content Generated!")
                         st.divider()
                         
                         st.subheader("Generated Content")
-                        st.markdown(result["content"])
+                        st.write(result["content"])  # Changed from st.markdown() to st.write()
                         
-                        if "hashtags" in result["metadata"]:
+                        if "hashtags" in result.get("metadata", {}):
                             st.caption(f"**Hashtags:** {', '.join(result['metadata']['hashtags'])}")
-                        
+                        elif "hashtags" in result:
+                            st.caption(f"**Hashtags:** {', '.join(result['hashtags'])}")
+                                                
                         # Action buttons
                         col_a, col_b, col_c = st.columns(3)
                         with col_a:
