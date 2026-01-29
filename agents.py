@@ -22,7 +22,7 @@ class BrandVoice:
 class ContentAgent:
     def __init__(self, api_key: str = None):
         self.api_key = api_key or os.environ.get("GROQ_API_KEY") or os.environ.get("GROK_API_KEY")
-        #self.base_url = "https://api.x.ai/v1"
+        self.base_url = "https://api.x.ai/v1"
         
         # Debug output
         print(f"ContentAgent initialized")
