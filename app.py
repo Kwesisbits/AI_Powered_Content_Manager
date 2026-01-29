@@ -207,7 +207,7 @@ with tab1:
         )
         
         # Advanced options
-        with st.expander("⚙️ Advanced Options"):
+        with st.expander(" Advanced Options"):
             col_a, col_b = st.columns(2)
             with col_a:
                 tone = st.selectbox(
@@ -324,16 +324,38 @@ with tab1:
                         st.info("Please check your GROQ_API_KEY environment variable and try again.")
     
     with col2:
-        st.header("Recent Drafts")
+        st.header("Recent Drafts & Revisions")
         
         # Show recent AI-generated content
-        recent_drafts = system["db"].get_recent_content(limit=5)
+        recent_drafts = system["db"].get_recent_content(limit=8)
         
         if not recent_drafts:
             st.info("No drafts yet. Create your first AI content!")
         else:
             for draft in recent_drafts:
-                with st.expander(f"{draft['platform']}: {draft['topic'][:30]}..."):
+                # Check if this is a revision
+                is_revision = False
+                revision_info = ""
+                
+                if draft.get('metadata'):
+                    metadata = draft['metadata']
+                    if isinstance(metadata, str):
+                        try:
+                            metadata = json.loads(metadata)
+                        except:
+                            metadata = {}
+                    
+                    if 'revision_of' in metadata:
+                        is_revision = True
+                        revision_info = f"Revision of #{metadata['revision_of']}"
+                        if 'revision_notes' in metadata:
+                            revision_info += f" - {metadata['revision_notes'][:30]}..."
+                
+                expander_title = f"{draft['platform']}: {draft['topic'][:30]}..."
+                if is_revision:
+                    expander_title = f"📝 {expander_title}"
+                
+                with st.expander(expander_title):
                     # Handle content display
                     content_to_show = draft.get('content', '')
                     if isinstance(content_to_show, dict):
@@ -341,6 +363,9 @@ with tab1:
                     
                     st.write(content_to_show[:200] + "...")
                     st.caption(f"Status: {draft['status']} | Created: {draft['created_at']}")
+                    
+                    if is_revision:
+                        st.info(revision_info)
                     
                     if draft['status'] == 'draft':
                         col_x, col_y = st.columns(2)
@@ -408,7 +433,7 @@ with tab2:
 
 # ========== TAB 3: APPROVAL WORKFLOW ==========
 with tab3:
-    st.header(" Approval Workflow")
+    st.header("Approval Workflow")
     st.caption("Hard approval gate - No content publishes without explicit approval")
     
     # Get content pending approval
@@ -422,6 +447,32 @@ with tab3:
             # Display content for approval
             st.subheader(f"Reviewing: {content['platform']} - {content['topic']}")
             
+            # SHOW REVISIONS IF ANY
+            revisions = system["db"].get_revisions_of_content(content['id'])
+            if revisions:
+                st.subheader("Revision History")
+                for rev in revisions:
+                    with st.expander(f"Revision from {rev['created_at']}"):
+                        rev_content = rev.get('content', '')
+                        if isinstance(rev_content, dict):
+                            rev_content = rev_content.get('content', 'No content')
+                        st.write(rev_content)
+                        
+                        # Show revision notes
+                        rev_metadata = rev.get('metadata', {})
+                        if isinstance(rev_metadata, str):
+                            try:
+                                rev_metadata = json.loads(rev_metadata)
+                            except:
+                                rev_metadata = {}
+                        
+                        if 'revision_notes' in rev_metadata:
+                            st.info(f"Revision Notes: {rev_metadata['revision_notes']}")
+                        if 'reviewer' in rev_metadata:
+                            st.caption(f"Requested by: {rev_metadata['reviewer']}")
+                st.divider()
+            # END REVISIONS
+            
             col1, col2 = st.columns([3, 1])
             
             with col1:
@@ -432,32 +483,23 @@ with tab3:
                 
                 st.write(content_to_show)
                 
-                # AI Analysis
-                with st.expander(" AI Analysis", expanded=True):
-                    if content.get('metadata'):
-                        try:
-                            if isinstance(content['metadata'], str):
-                                metadata = json.loads(content['metadata'])
-                            else:
-                                metadata = content['metadata']
-                            st.json(metadata, expanded=False)
-                        except:
-                            st.info("No metadata available")
-                
                 # Edit interface
-                with st.expander(" Request Edits", expanded=False):
+                with st.expander("Request Edits", expanded=False):
                     edit_notes = st.text_area("Edit instructions for AI:")
                     
-                    if st.button(" Send for Revision"):
+                    if st.button("Send for Revision"):
                         if edit_notes:
-                            system["workflow"].request_revision(
+                            success = system["workflow"].request_revision(
                                 content['id'], 
                                 edit_notes,
                                 st.session_state.get('user', 'admin')
                             )
-                            st.success("Sent back for AI revision! In production, this would trigger AI regeneration.")
-                            time.sleep(1)
-                            st.rerun()
+                            if success:
+                                st.success("Content sent for AI revision! Check 'Recent Drafts' for the new version.")
+                                time.sleep(2)
+                                st.rerun()
+                            else:
+                                st.error("Revision failed")
             
             with col2:
                 # Approval actions
@@ -465,25 +507,25 @@ with tab3:
                 
                 approver = st.text_input("Approver Name", "admin@company.com")
                 
-                if st.button(" APPROVE CONTENT", type="primary", use_container_width=True):
+                if st.button("APPROVE CONTENT", type="primary", use_container_width=True):
                     system["workflow"].approve(
                         content['id'],
                         approver=approver,
                         comments="Approved via dashboard"
                     )
-                    st.success(" Content Approved!")
+                    st.success("Content Approved!")
                     
                     # Auto-schedule if in supervised mode
                     if system["safety"].mode == "supervised_auto":
                         schedule_time = datetime.now() + timedelta(hours=2)
                         system["scheduler"].schedule_content(content['id'], schedule_time)
-                        st.info(f" Auto-scheduled for {schedule_time.strftime('%Y-%m-%d %H:%M')}")
+                        st.info(f"Auto-scheduled for {schedule_time.strftime('%Y-%m-%d %H:%M')}")
                     
                     time.sleep(2)
                     st.session_state.current_content_id = None
                     st.rerun()
                 
-                if st.button(" REJECT CONTENT", type="secondary", use_container_width=True):
+                if st.button("REJECT CONTENT", type="secondary", use_container_width=True):
                     rejection_reason = st.text_input("Rejection reason:", key="reject_reason")
                     
                     if rejection_reason:
@@ -492,7 +534,7 @@ with tab3:
                             reason=rejection_reason,
                             reviewer=approver
                         )
-                        st.error(" Content Rejected")
+                        st.error("Content Rejected")
                         time.sleep(2)
                         st.rerun()
                 
