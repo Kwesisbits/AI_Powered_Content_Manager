@@ -8,9 +8,7 @@ import requests
 import json
 from typing import Dict, List, Optional
 from dataclasses import dataclass
-import base64
-from PIL import Image
-import io
+import re
 
 @dataclass
 class BrandVoice:
@@ -22,9 +20,16 @@ class BrandVoice:
     forbidden_topics: List[str]
 
 class ContentAgent:
-    def __init__(self, api_key: str):
+    def __init__(self, api_key: str = None):
         self.api_key = api_key or os.environ.get("GROQ_API_KEY") or os.environ.get("GROK_API_KEY")
+        #self.base_url = "https://api.x.ai/v1"
         
+        # Debug output
+        print(f"ContentAgent initialized")
+        print(f"API Key available: {'YES' if self.api_key else 'NO'}")
+        if self.api_key:
+            print(f"Key starts with xai-: {self.api_key.startswith('xai-')}")
+            print(f"Key length: {len(self.api_key)}")
         
         # Platform-specific templates
         self.platform_templates = {
@@ -57,34 +62,46 @@ class ContentAgent:
         Generate high-quality, platform-specific content using Grok API
         """
         
+        print(f"generate_content called for {platform}: {topic[:50]}...")
+        
         # Analyze media if provided
         media_context = self._analyze_media(media_files) if media_files else None
         
         # Construct detailed prompt
         prompt = self._construct_prompt(platform, topic, brand_voice, tone, media_context)
         
-        try:
-            # Call Grok API
-            response = self._call_grok_api(prompt)
-            
-            # Parse and structure response
-            content_data = self._parse_ai_response(response, platform)
-            
-            # Add metadata
-            content_data["metadata"] = {
-                "generated_by": "grok_api",
-                "platform": platform,
-                "tone": tone or brand_voice.tone,
-                "hashtags": content_data.get("hashtags", []),
-                "optimal_post_time": self._get_optimal_time(platform),
-                "ai_notes": content_data.get("ai_notes", ""),
-                "media_context": media_context
-            }
-            
-            return content_data
-            
-        except Exception as e:
-            # Fallback to template-based generation
+        # Check if we have a valid API key
+        has_valid_key = bool(self.api_key and len(self.api_key) > 20)
+        
+        if has_valid_key:
+            try:
+                print("Attempting Grok API call...")
+                # Call Grok API
+                response = self._call_grok_api(prompt)
+                print("Grok API call successful")
+                
+                # Parse and structure response
+                content_data = self._parse_ai_response(response, platform)
+                
+                # Add metadata
+                content_data["metadata"] = {
+                    "generated_by": "grok_api",
+                    "platform": platform,
+                    "tone": tone or brand_voice.tone,
+                    "hashtags": content_data.get("hashtags", []),
+                    "optimal_post_time": self._get_optimal_time(platform),
+                    "ai_notes": content_data.get("ai_notes", ""),
+                    "media_context": media_context
+                }
+                
+                return content_data
+                
+            except Exception as e:
+                print(f"Grok API failed: {str(e)}")
+                # Fallback to template-based generation
+                return self._generate_fallback_content(platform, topic, brand_voice, media_context)
+        else:
+            print("Using fallback (no valid API key)")
             return self._generate_fallback_content(platform, topic, brand_voice, media_context)
     
     def _construct_prompt(self, platform: str, topic: str, brand_voice: BrandVoice,
@@ -136,6 +153,9 @@ FORMAT YOUR RESPONSE AS JSON:
     def _call_grok_api(self, prompt: str) -> str:
         """Make actual API call to Grok"""
         
+        if not self.api_key:
+            raise Exception("No API key provided")
+        
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
@@ -157,40 +177,56 @@ FORMAT YOUR RESPONSE AS JSON:
             "max_tokens": 1000
         }
         
-        response = requests.post(
-            f"{self.base_url}/chat/completions",
-            headers=headers,
-            json=payload,
-            timeout=30
-        )
-        
-        response.raise_for_status()
-        return response.json()["choices"][0]["message"]["content"]
+        try:
+            response = requests.post(
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=30
+            )
+            
+            # Check response
+            if response.status_code != 200:
+                error_msg = f"API error {response.status_code}"
+                try:
+                    error_data = response.json()
+                    if 'error' in error_data:
+                        error_msg += f": {error_data['error'].get('message', 'Unknown error')}"
+                except:
+                    error_msg += f": {response.text[:100]}"
+                print(error_msg)
+                raise Exception(error_msg)
+            
+            return response.json()["choices"][0]["message"]["content"]
+            
+        except requests.exceptions.RequestException as e:
+            print(f"Request failed: {e}")
+            raise Exception(f"API request failed: {e}")
     
     def _analyze_media(self, media_files: List) -> str:
         """Extract context from uploaded media"""
+        if not media_files:
+            return None
+        
         contexts = []
-        
         for file in media_files:
-            if file.type.startswith('image'):
-                # For images, we can describe them
-                try:
-                    image = Image.open(file)
-                    contexts.append(f"Image: {image.size[0]}x{image.size[1]} pixels, format: {image.format}")
-                except:
-                    contexts.append(f"Image file: {file.name}")
-            
-            elif file.type.startswith('video'):
-                contexts.append(f"Video file: {file.name}")
+            try:
+                if hasattr(file, 'type') and file.type.startswith('image'):
+                    contexts.append(f"Image: {file.name}")
+                elif hasattr(file, 'type') and file.type.startswith('video'):
+                    contexts.append(f"Video: {file.name}")
+                else:
+                    contexts.append(f"File: {file.name}")
+            except:
+                contexts.append("Media file")
         
-        return " | ".join(contexts) if contexts else "Media files uploaded"
+        return " | ".join(contexts) if contexts else None
     
     def _parse_ai_response(self, response: str, platform: str) -> Dict:
         """Parse and clean AI response"""
         
         try:
             # Try to extract JSON
-            import re
             json_match = re.search(r'\{.*\}', response, re.DOTALL)
             
             if json_match:
@@ -198,11 +234,11 @@ FORMAT YOUR RESPONSE AS JSON:
                 
                 # Ensure required fields
                 if "content" not in data:
-                    data["content"] = response[:500]  # Fallback
+                    data["content"] = response[:500]
                 
                 return data
-        except:
-            pass
+        except json.JSONDecodeError as e:
+            print(f"JSON parsing failed: {e}")
         
         # Fallback parsing
         return {
@@ -214,7 +250,6 @@ FORMAT YOUR RESPONSE AS JSON:
     
     def _extract_hashtags(self, text: str) -> List[str]:
         """Extract hashtags from text"""
-        import re
         hashtags = re.findall(r'#\w+', text)
         return list(set(hashtags))[:5]  # Max 5 unique hashtags
     
@@ -232,35 +267,17 @@ FORMAT YOUR RESPONSE AS JSON:
                                   brand_voice: BrandVoice, media_context: Optional[str]) -> Dict:
         """Generate fallback content if API fails"""
         
+        # Use actual company name from brand_voice
+        company = brand_voice.company_name
+        topic_words = topic.split()
+        main_topic = topic_words[0] if topic_words else "innovation"
+        
         templates = {
-            "linkedin": f""" {topic}
-
-At {brand_voice.company_name}, we're passionate about driving innovation. Here's what we're seeing in the market:
-
-🔹 Key insight 1
-🔹 Key insight 2  
-🔹 Key insight 3
-
-What challenges are you facing with {topic.split()[0]}? Share your experiences below!
-
-#{brand_voice.company_name.replace(' ', '')} #Innovation #Tech""",
+            "linkedin": f"{topic}\n\nAt {company}, we're seeing transformative changes. Key insights:\n\n1. Strategic implementation of {main_topic.lower()}\n2. Integration challenges and solutions\n3. Measuring business impact\n\nWhat challenges are you facing with {main_topic.lower()} implementation?\n\n#{company.replace(' ', '')} #{main_topic.capitalize()} #DigitalTransformation",
             
-            "twitter": f"""Just explored {topic}!
-
-The intersection of technology and business is evolving rapidly. Key takeaways:
-
-• Point 1
-• Point 2
-
-Thoughts? #Tech #Business #AI""",
+            "twitter": f"Exploring {topic} today. Key points:\n\n1. Current trends\n2. Business implications\n3. Future outlook\n\nThoughts on this space?\n\n#{main_topic.capitalize()} #Tech #Innovation",
             
-            "instagram": f""" Deep dive into {topic}!
-
-{media_context or 'Visual exploration of technology trends'}
-
-What excites you most about the future of tech? 
-
-#TechLife #Innovation #FutureTech"""
+            "instagram": f"Deep dive into {topic}!\n\n{media_context or 'Visual exploration of modern technology'}\n\nWhat excites you most about {main_topic.lower()}? Share below!\n\n#{main_topic.capitalize()} #TechInnovation #FutureForward"
         }
         
         content = templates.get(platform.lower(), templates["linkedin"])
@@ -273,6 +290,6 @@ What excites you most about the future of tech?
             "metadata": {
                 "generated_by": "fallback_template",
                 "platform": platform,
-                "ai_notes": "Generated from template (API unavailable)"
+                "ai_notes": "Generated from fallback template"
             }
         }
