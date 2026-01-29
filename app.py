@@ -91,7 +91,7 @@ def init_system():
     scheduler = PostingScheduler(db)
     
     if not api_key:
-        st.sidebar.warning("⚠️ Set GROQ_API_KEY environment variable for AI generation")
+        st.sidebar.warning(" Set GROQ_API_KEY environment variable for AI generation")
     else:
         st.sidebar.success("✅ Groq API key loaded")
     
@@ -127,11 +127,11 @@ with st.sidebar:
     st.title("Control Panel")
     
     # Emergency Controls
-    st.subheader("🚨 Safety Controls")
+    st.subheader(" Safety Controls")
     
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("⏸️ Pause All", type="secondary"):
+        if st.button(" Pause All", type="secondary"):
             system["safety"].emergency_pause("Manual pause activated")
             st.session_state.emergency_mode = True
             st.error("All automation paused!")
@@ -139,7 +139,7 @@ with st.sidebar:
             st.rerun()
     
     with col2:
-        if st.button("▶️ Resume", disabled=not st.session_state.emergency_mode):
+        if st.button(" Resume", disabled=not st.session_state.emergency_mode):
             system["safety"].resume_operations()
             st.session_state.emergency_mode = False
             st.success("System resumed!")
@@ -148,7 +148,7 @@ with st.sidebar:
     
     # System Mode
     st.divider()
-    st.subheader("⚙️ System Mode")
+    st.subheader(" System Mode")
     
     mode = st.selectbox(
         "Operation Mode",
@@ -162,7 +162,7 @@ with st.sidebar:
     
     # Brand Configuration
     st.divider()
-    st.subheader("🏢 Brand Voice")
+    st.subheader(" Brand Voice")
     
     with st.expander("Configure Brand", expanded=False):
         st.text_input("Company Name", value=system["brand"].company_name)
@@ -172,7 +172,7 @@ with st.sidebar:
     
     # System Status
     st.divider()
-    st.subheader("📊 System Status")
+    st.subheader(" System Status")
     
     # Get stats from database
     stats = system["db"].get_system_stats()
@@ -183,16 +183,16 @@ with st.sidebar:
     st.metric("AI Generations", stats.get("generated", 0))
 
 # ========== MAIN DASHBOARD ==========
-st.title("🤖 AI Content Agent - Production System")
+st.title(" AI Content Agent - Production System")
 st.caption("Enterprise-grade AI automation with human-in-the-loop controls")
 
 # Tabs with proper workflow
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📝 Create", 
-    "👁️ Review", 
-    "✅ Approve", 
-    "📅 Schedule", 
-    "📊 Monitor"
+    " Create", 
+    " Review", 
+    " Approve", 
+    " Schedule", 
+    " Monitor"
 ])
 
 # ========== TAB 1: AI CONTENT CREATION ==========
@@ -244,7 +244,7 @@ with tab1:
         )
         
         if uploaded_files:
-            st.success(f"✅ {len(uploaded_files)} file(s) uploaded")
+            st.success(f" {len(uploaded_files)} file(s) uploaded")
             cols = st.columns(min(3, len(uploaded_files)))
             for idx, file in enumerate(uploaded_files[:3]):
                 with cols[idx % 3]:
@@ -255,11 +255,11 @@ with tab1:
                     st.caption(file.name[:20])
         
         # Generate button with confirmation
-        if st.button("🚀 Generate AI Content", type="primary"):
+        if st.button(" Generate AI Content", type="primary"):
             if not topic:
                 st.error("Please enter a content brief")
             else:
-                with st.spinner("🤖 AI agent creating content..."):
+                with st.spinner(" AI agent creating content..."):
                     try:
                         # Get ALL advanced options
                         advanced_options = {
@@ -290,7 +290,7 @@ with tab1:
                         st.session_state.current_content_id = content_id
                         
                         # Show generated content
-                        st.success("✅ AI Content Generated!")
+                        st.success(" AI Content Generated!")
                         st.divider()
                         
                         # Display ALL information
@@ -316,17 +316,17 @@ with tab1:
                         # Action buttons
                         col_a, col_b, col_c = st.columns(3)
                         with col_a:
-                            if st.button("📤 Submit for Approval", use_container_width=True):
+                            if st.button(" Submit for Approval", use_container_width=True):
                                 system["workflow"].submit_for_approval(content_id)
                                 st.success("Submitted to approval queue!")
                                 st.session_state.refresh_needed = True
                                 time.sleep(1)
                                 st.rerun()
                         with col_b:
-                            if st.button("✏️ Edit & Resubmit", use_container_width=True):
+                            if st.button(" Edit & Resubmit", use_container_width=True):
                                 st.info("Edit interface would open here")
                         with col_c:
-                            if st.button("🗑️ Discard", use_container_width=True, type="secondary"):
+                            if st.button(" Discard", use_container_width=True, type="secondary"):
                                 system["db"].update_status(content_id, "discarded")
                                 st.info("Content discarded")
                                 st.session_state.refresh_needed = True
@@ -334,7 +334,7 @@ with tab1:
                                 st.rerun()
                                 
                     except Exception as e:
-                        st.error(f"❌ AI Generation failed: {str(e)}")
+                        st.error(f" AI Generation failed: {str(e)}")
                         st.info("Please check your GROQ_API_KEY environment variable and try again.")
     
     with col2:
@@ -361,13 +361,13 @@ with tab1:
                     
                     if 'revision_of' in metadata:
                         is_revision = True
-                        revision_info = f"📝 Revision of #{metadata['revision_of']}"
+                        revision_info = f" Revision of #{metadata['revision_of']}"
                         if 'revision_notes' in metadata:
                             revision_info += f" - {metadata['revision_notes'][:30]}..."
                 
                 expander_title = f"{draft['platform']}: {draft['topic'][:30]}..."
                 if is_revision:
-                    expander_title = f"📝 {expander_title}"
+                    expander_title = f" {expander_title}"
                 
                 with st.expander(expander_title):
                     # Handle content display
@@ -398,14 +398,14 @@ with tab1:
 
 # ========== TAB 2: REVIEW QUEUE ==========
 with tab2:
-    st.header("👁️ Content Review Queue")
+    st.header(" Content Review Queue")
     st.caption("Content pending review before approval")
     
     # Get content needing review - FIXED to show 'pending_approval'
     review_queue = system["db"].get_content_by_status("pending_approval")
     
     if not review_queue:
-        st.info("🎉 No content pending review")
+        st.info(" No content pending review")
     else:
         for item in review_queue:
             with st.container():
@@ -440,7 +440,7 @@ with tab2:
                     st.caption(f"Created: {item['created_at']}")
                     
                     # Review actions
-                    if st.button("👁️ Review", key=f"review_{item['id']}", use_container_width=True):
+                    if st.button(" Review", key=f"review_{item['id']}", use_container_width=True):
                         st.session_state.selected_tab = "approve"
                         st.session_state.current_content_id = item['id']
                         st.rerun()
@@ -449,7 +449,7 @@ with tab2:
 
 # ========== TAB 3: APPROVAL WORKFLOW ==========
 with tab3:
-    st.header("✅ Approval Workflow")
+    st.header(" Approval Workflow")
     st.caption("Hard approval gate - No content publishes without explicit approval")
     
     # Get content pending approval
@@ -466,7 +466,7 @@ with tab3:
             # SHOW REVISIONS IF ANY
             revisions = system["db"].get_revisions_of_content(content['id'])
             if revisions:
-                st.subheader("📝 Revision History")
+                st.subheader(" Revision History")
                 for rev in revisions:
                     with st.expander(f"Revision from {rev['created_at']}"):
                         rev_content = rev.get('content', '')
@@ -510,7 +510,7 @@ with tab3:
                 st.write(content_to_show)
                 
                 # AI Analysis
-                with st.expander("🤖 AI Analysis", expanded=True):
+                with st.expander(" AI Analysis", expanded=True):
                     if content.get('metadata'):
                         try:
                             if isinstance(content['metadata'], str):
@@ -522,10 +522,10 @@ with tab3:
                             st.info("No metadata available")
                 
                 # Edit interface
-                with st.expander("✏️ Request Edits", expanded=False):
+                with st.expander(" Request Edits", expanded=False):
                     edit_notes = st.text_area("Edit instructions for AI:", placeholder="e.g., Make it more technical, focus on ROI, use more data-driven language...")
                     
-                    if st.button("📝 Send for Revision"):
+                    if st.button(" Send for Revision"):
                         if edit_notes:
                             success = system["workflow"].request_revision(
                                 content['id'], 
@@ -533,12 +533,12 @@ with tab3:
                                 st.session_state.get('user', 'admin')
                             )
                             if success:
-                                st.success("✅ Content sent for AI revision! Check 'Recent Drafts & Revisions' for the new version.")
+                                st.success(" Content sent for AI revision! Check 'Recent Drafts & Revisions' for the new version.")
                                 st.session_state.refresh_needed = True
                                 time.sleep(2)
                                 st.rerun()
                             else:
-                                st.error("❌ Revision failed")
+                                st.error(" Revision failed")
             
             with col2:
                 # Approval actions
@@ -546,26 +546,26 @@ with tab3:
                 
                 approver = st.text_input("Approver Name", "admin@company.com")
                 
-                if st.button("✅ APPROVE CONTENT", type="primary", use_container_width=True):
+                if st.button(" APPROVE CONTENT", type="primary", use_container_width=True):
                     system["workflow"].approve(
                         content['id'],
                         approver=approver,
                         comments="Approved via dashboard"
                     )
-                    st.success("✅ Content Approved!")
+                    st.success(" Content Approved!")
                     
                     # Auto-schedule if in supervised mode
                     if system["safety"].mode == "supervised_auto":
                         schedule_time = datetime.now() + timedelta(hours=2)
                         system["scheduler"].schedule_content(content['id'], schedule_time)
-                        st.info(f"📅 Auto-scheduled for {schedule_time.strftime('%Y-%m-%d %H:%M')}")
+                        st.info(f" Auto-scheduled for {schedule_time.strftime('%Y-%m-%d %H:%M')}")
                     
                     time.sleep(2)
                     st.session_state.current_content_id = None
                     st.session_state.refresh_needed = True
                     st.rerun()
                 
-                if st.button("❌ REJECT CONTENT", type="secondary", use_container_width=True):
+                if st.button(" REJECT CONTENT", type="secondary", use_container_width=True):
                     rejection_reason = st.text_input("Rejection reason:", key="reject_reason", placeholder="e.g., Too technical, needs more business focus...")
                     
                     if rejection_reason:
@@ -574,7 +574,7 @@ with tab3:
                             reason=rejection_reason,
                             reviewer=approver
                         )
-                        st.error("❌ Content Rejected")
+                        st.error(" Content Rejected")
                         time.sleep(2)
                         st.session_state.current_content_id = None
                         st.session_state.refresh_needed = True
@@ -583,7 +583,7 @@ with tab3:
                 # Safety check
                 safety_check = system["safety"].check_content(content_to_show)
                 if not safety_check["safe"]:
-                    st.warning("⚠️ Safety flags detected")
+                    st.warning(" Safety flags detected")
                     for flag in safety_check["flags"]:
                         st.caption(f"• {flag}")
     
@@ -593,7 +593,7 @@ with tab3:
         st.subheader("Approval Queue")
         
         if not approval_queue:
-            st.info("✅ No content in approval queue")
+            st.info(" No content in approval queue")
         else:
             for item in approval_queue:
                 col1, col2, col3 = st.columns([3, 1, 1])
@@ -609,7 +609,7 @@ with tab3:
 
 # ========== TAB 4: SCHEDULING ==========
 with tab4:
-    st.header("📅 Content Scheduling")
+    st.header(" Content Scheduling")
     
     col1, col2 = st.columns([2, 1])
     
@@ -633,7 +633,7 @@ with tab4:
             with st.expander(f"{day.strftime('%A, %b %d')}"):
                 if day_content:
                     for content in day_content:
-                        st.write(f"⏰ {content['scheduled_time'].strftime('%H:%M')} - {content['platform']}")
+                        st.write(f" {content['scheduled_time'].strftime('%H:%M')} - {content['platform']}")
                         st.caption(content['topic'][:50])
                 else:
                     st.info("No content scheduled")
@@ -656,7 +656,7 @@ with tab4:
                 with col_b:
                     schedule_time = st.time_input("Time")
                 
-                if st.button("📅 Schedule Content"):
+                if st.button(" Schedule Content"):
                     schedule_datetime = datetime.combine(schedule_date, schedule_time)
                     
                     if schedule_datetime < datetime.now():
@@ -664,7 +664,7 @@ with tab4:
                     else:
                         content_id = content_options[selected]
                         system["scheduler"].schedule_content(content_id, schedule_datetime)
-                        st.success(f"✅ Scheduled for {schedule_datetime.strftime('%Y-%m-%d %H:%M')}")
+                        st.success(f" Scheduled for {schedule_datetime.strftime('%Y-%m-%d %H:%M')}")
                         time.sleep(1)
                         st.rerun()
             else:
@@ -707,7 +707,7 @@ with tab5:
     col1, col2 = st.columns([3, 1])
     
     with col1:
-        st.header("📊 System Monitoring")
+        st.header(" System Monitoring")
         
         # Real-time metrics
         metrics_cols = st.columns(4)
@@ -724,7 +724,7 @@ with tab5:
             st.metric("System Uptime", "99.8%", delta="-0.1%")
         
         # Activity timeline
-        st.subheader("📈 Activity Timeline")
+        st.subheader(" Activity Timeline")
         
         activities = system["db"].get_recent_activities(limit=10)
         
@@ -733,7 +733,7 @@ with tab5:
             st.caption(f"**{timestamp}** - {activity['action']}: {activity['details'][:50]}...")
         
         # Content performance (simulated)
-        st.subheader("📊 Content Performance")
+        st.subheader(" Content Performance")
         
         performance_data = {
             "Platform": ["LinkedIn", "Twitter", "Instagram", "Facebook"],
@@ -745,7 +745,7 @@ with tab5:
         st.dataframe(performance_data, use_container_width=True)
     
     with col2:
-        st.header("🔒 Safety Dashboard")
+        st.header(" Safety Dashboard")
         
         # Current safety status
         safety_status = system["safety"].get_status()
@@ -758,19 +758,19 @@ with tab5:
         st.divider()
         st.subheader("Safety Actions")
         
-        if st.button("🛡️ Enable Crisis Mode", type="secondary"):
+        if st.button(" Enable Crisis Mode", type="secondary"):
             system["safety"].activate_crisis_mode("manual_activation")
             st.session_state.emergency_mode = True
-            st.error("🛡️ CRISIS MODE ACTIVATED - All posting halted")
+            st.error(" CRISIS MODE ACTIVATED - All posting halted")
             st.rerun()
         
-        if st.button("👁️ Manual Review All", type="secondary"):
+        if st.button(" Manual Review All", type="secondary"):
             system["safety"].force_manual_review()
             st.warning("All content moved to manual review")
         
         # Audit log
         st.divider()
-        st.subheader("🔍 Recent Audit Log")
+        st.subheader(" Recent Audit Log")
         
         audit_log = system["safety"].get_audit_log(limit=5)
         
