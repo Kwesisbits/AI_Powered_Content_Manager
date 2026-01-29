@@ -16,79 +16,85 @@ class BrandVoice:
 
 class ContentAgent:
     def __init__(self, api_key: str = None):
-        self.api_key = api_key or os.environ.get("GROQ_API_KEY") or os.environ.get("GROK_API_KEY")
-        
-        print(f"DEBUG: API Key provided: {'YES' if self.api_key else 'NO'}")
-        if self.api_key:
-            print(f"DEBUG: Key value: {self.api_key[:15]}...")
-            print(f"DEBUG: Key starts with gsk_: {self.api_key.startswith('gsk_')}")
-            print(f"DEBUG: Key starts with xai-: {self.api_key.startswith('xai-')}")
-        
-        # Groq API endpoint
+        self.api_key = api_key or os.environ.get("GROQ_API_KEY")
         self.base_url = "https://api.groq.com/openai/v1"
+        
+        print(f"Agent initialized with key: {'YES' if self.api_key else 'NO'}")
         
     def generate_content(self, platform: str, topic: str, brand_voice: BrandVoice,
                         tone: Optional[str] = None, media_files: List = None) -> Dict:
+        """Generate AI content - SIMPLIFIED VERSION"""
         
-        print(f"DEBUG: Generating content for {platform}")
-        print(f"DEBUG: Topic: {topic}")
-        print(f"DEBUG: API Key available: {'YES' if self.api_key else 'NO'}")
+        print(f"\n=== GENERATING CONTENT ===")
+        print(f"Platform: {platform}")
+        print(f"Topic: {topic}")
+        print(f"Company: {brand_voice.company_name}")
         
-        # Check if we have ANY API key (Groq or xAI)
+        # If no API key, use minimal fallback
         if not self.api_key:
-            print("DEBUG: No API key, using fallback")
-            return self._generate_fallback_content(platform, topic, brand_voice)
+            print("No API key - using simple fallback")
+            return self._simple_fallback(platform, topic, brand_voice)
         
-        # Try to call the API regardless of prefix
         try:
-            print("DEBUG: Constructing prompt...")
-            prompt = self._construct_prompt(platform, topic, brand_voice, tone, None)
+            # Create prompt
+            prompt = f"""Create a creative, engaging {platform} social media post about: {topic}
             
-            print("DEBUG: Calling Groq API...")
-            response_text = self._call_groq_api(prompt)
+Company: {brand_voice.company_name}
+Brand Voice: {brand_voice.tone}
+Audience: {brand_voice.target_audience}
+Key Traits: {', '.join(brand_voice.personality_traits)}
+
+Make it:
+1. Platform-appropriate for {platform}
+2. Include 3-5 relevant hashtags
+3. Add a thought-provoking question
+4. Be creative and insightful
+5. Don't use placeholders like "Key insight 1" - provide actual insights
+
+Write naturally as a social media post, not in JSON format."""
             
-            print("DEBUG: API call successful!")
-            print(f"DEBUG: Response length: {len(response_text)} chars")
+            # Call API
+            print("Calling Groq API...")
+            response = self._call_api(prompt)
             
-            # Parse response
-            content_data = self._parse_ai_response(response_text, platform)
+            # Process response
+            content = response.strip()
+            print(f"API Response received ({len(content)} chars)")
             
-            content_data["metadata"] = {
-                "generated_by": "groq_api",
-                "platform": platform,
-                "hashtags": content_data.get("hashtags", []),
+            # Extract hashtags
+            hashtags = re.findall(r'#\w+', content)
+            hashtags = list(set(hashtags))[:5]
+            
+            # If no hashtags in response, add some
+            if not hashtags:
+                main_word = topic.split()[0].lower() if topic.split() else "innovation"
+                hashtags = [f"#{brand_voice.company_name.replace(' ', '')}", 
+                          f"#{main_word.capitalize()}", "#TechInnovation"]
+            
+            # Return result
+            result = {
+                "content": content,
+                "hashtags": hashtags,
+                "engagement_question": "What are your thoughts?",
+                "optimal_post_time": "9:00 AM",
+                "metadata": {
+                    "generated_by": "groq_api",
+                    "platform": platform,
+                    "tone": tone or brand_voice.tone,
+                    "word_count": len(content.split())
+                }
             }
             
-            return content_data
+            print("Content generation successful")
+            return result
             
         except Exception as e:
-            print(f"DEBUG: API failed: {str(e)}")
-            print("DEBUG: Using fallback content")
-            return self._generate_fallback_content(platform, topic, brand_voice)
+            print(f"API Error: {e}")
+            # Use better fallback
+            return self._creative_fallback(platform, topic, brand_voice)
     
-    def _construct_prompt(self, platform: str, topic: str, brand_voice: BrandVoice,
-                         tone: Optional[str], media_context: Optional[str]) -> str:
-        
-        prompt = f"""Create a {platform} social media post about: {topic}
-
-Company: {brand_voice.company_name}
-Brand Tone: {tone or brand_voice.tone}
-Target Audience: {brand_voice.target_audience}
-Content Pillars: {', '.join(brand_voice.content_pillars)}
-Forbidden Topics: {', '.join(brand_voice.forbidden_topics)}
-
-Make it engaging, professional, and platform-appropriate. Include 3-5 relevant hashtags.
-Add a question to engage the audience. Provide valuable insights about the topic."""
-        
-        return prompt
-    
-    def _call_groq_api(self, prompt: str) -> str:
-        """Call Groq API"""
-        
-        if not self.api_key:
-            raise Exception("No API key provided")
-        
-        url = f"{self.base_url}/chat/completions"
+    def _call_api(self, prompt: str) -> str:
+        """Simple API call"""
         
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -96,80 +102,86 @@ Add a question to engage the audience. Provide valuable insights about the topic
         }
         
         payload = {
-            "messages": [
-                {"role": "user", "content": prompt}
-            ],
+            "messages": [{"role": "user", "content": prompt}],
             "model": "mixtral-8x7b-32768",
-            "temperature": 0.7,
-            "max_tokens": 500
+            "temperature": 0.8,  # More creative
+            "max_tokens": 400
         }
         
-        print(f"DEBUG: Sending request to: {url}")
-        print(f"DEBUG: Payload keys: {list(payload.keys())}")
-        
         response = requests.post(
-            url,
+            f"{self.base_url}/chat/completions",
             headers=headers,
             json=payload,
             timeout=30
         )
         
-        print(f"DEBUG: Response status: {response.status_code}")
-        
         if response.status_code != 200:
-            print(f"DEBUG: Response error: {response.text[:200]}")
-            raise Exception(f"API error {response.status_code}")
+            raise Exception(f"API error {response.status_code}: {response.text[:100]}")
         
-        response_json = response.json()
-        
-        # Debug the response structure
-        print(f"DEBUG: Response keys: {list(response_json.keys())}")
-        if 'choices' in response_json:
-            print(f"DEBUG: Number of choices: {len(response_json['choices'])}")
-        
-        return response_json["choices"][0]["message"]["content"]
+        data = response.json()
+        return data["choices"][0]["message"]["content"]
     
-    def _parse_ai_response(self, response: str, platform: str) -> Dict:
-        """Parse API response"""
-        
+    def _simple_fallback(self, platform: str, topic: str, brand_voice: BrandVoice) -> Dict:
+        """Absolute simplest fallback"""
+        content = f"Exploring {topic} at {brand_voice.company_name}. #Innovation #Tech"
         return {
-            "content": response,
-            "hashtags": self._extract_hashtags(response),
-            "engagement_question": "What are your thoughts?",
-            "optimal_post_time": "10:00 AM"
+            "content": content,
+            "hashtags": ["#Innovation", "#Tech"],
+            "metadata": {"generated_by": "simple_fallback"}
         }
     
-    def _extract_hashtags(self, text: str) -> List[str]:
-        hashtags = re.findall(r'#\w+', text)
-        return list(set(hashtags))[:3]
-    
-    def _generate_fallback_content(self, platform: str, topic: str, 
-                                  brand_voice: BrandVoice) -> Dict:
-        """Fallback content - will only be used if API completely fails"""
+    def _creative_fallback(self, platform: str, topic: str, brand_voice: BrandVoice) -> Dict:
+        """Creative fallback that actually generates content"""
+        
+        import random
         
         company = brand_voice.company_name
-        topic_words = topic.split()
-        main_topic = topic_words[0] if topic_words else topic[:20]
+        topic_lower = topic.lower()
         
-        content = f"{topic}\n\n"
-        content += f"At {company}, we're exploring this important area. "
-        content += f"Our analysis of {main_topic.lower()} reveals several key areas:\n\n"
-        content += "• Strategic implementation approaches\n"
-        content += "• Integration with existing systems\n"
-        content += "• Measuring return on investment\n"
-        content += "• Future developments and trends\n\n"
-        content += f"How is your organization approaching {main_topic.lower()}? "
-        content += "Share your insights and challenges in the comments.\n\n"
-        content += f"#{company.replace(' ', '')} #{main_topic.capitalize()} #BusinessStrategy #TechInnovation"
+        # Different intro templates
+        intros = [
+            f" Exciting developments in {topic_lower}!",
+            f" Deep dive into {topic_lower} today.",
+            f" Analyzing the impact of {topic_lower}.",
+            f" Exploring innovations in {topic_lower}."
+        ]
+        
+        # Different insights
+        insights = [
+            f"Organizations implementing {topic_lower} solutions report significant efficiency gains.",
+            f"The adoption curve for {topic_lower} is accelerating across industries.",
+            f"{topic_lower} represents one of the most transformative technologies today.",
+            f"Successful {topic_lower} implementation requires strategic planning and execution."
+        ]
+        
+        # Different questions
+        questions = [
+            f"What's been your experience with {topic_lower}?",
+            f"How is your organization approaching {topic_lower}?",
+            f"What challenges have you faced with {topic_lower} implementation?",
+            f"Where do you see {topic_lower} making the biggest impact?"
+        ]
+        
+        # Build content
+        content = f"{random.choice(intros)}\n\n"
+        content += f"At {company}, we're seeing {topic_lower} reshape business landscapes. "
+        content += f"{random.choice(insights)}\n\n"
+        content += f"Key considerations:\n• Strategic alignment\n• Technical integration\n• ROI measurement\n• Future scalability\n\n"
+        content += f"{random.choice(questions)}\n\n"
+        content += f"#{company.replace(' ', '')} #{topic.split()[0].capitalize() if topic.split() else 'Innovation'} #BusinessStrategy"
+        
+        hashtags = [f"#{company.replace(' ', '')}", 
+                   f"#{topic.split()[0].capitalize() if topic.split() else 'Innovation'}", 
+                   "#BusinessStrategy", "#Tech"]
         
         return {
             "content": content,
-            "hashtags": [f"#{company.replace(' ', '')}", f"#{main_topic.capitalize()}", "#Innovation"],
-            "engagement_question": f"What's your perspective on {main_topic.lower()}?",
+            "hashtags": hashtags,
+            "engagement_question": random.choice(questions),
             "optimal_post_time": "9:00 AM",
             "metadata": {
-                "generated_by": "fallback_template",
+                "generated_by": "creative_fallback",
                 "platform": platform,
-                "ai_notes": "Generated from fallback template"
+                "ai_notes": "Generated with creative variation"
             }
         }
