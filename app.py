@@ -13,8 +13,49 @@ import json
 from agents import ContentAgent, BrandVoice
 from workflow import ApprovalWorkflow, ContentState
 from safety import SafetyController, SystemMode
-from scheduler import PostingScheduler
+#from scheduler import PostingScheduler
 from database import ContentDatabase
+
+# ========== SIMPLE SCHEDULER ==========
+class PostingScheduler:
+    def __init__(self, database):
+        self.db = database
+        self.scheduled = []
+    
+    def schedule_content(self, content_id, schedule_time):
+        """Schedule content for posting"""
+        self.db.update_status(content_id, "scheduled")
+        
+        self.scheduled.append({
+            "content_id": content_id,
+            "scheduled_time": schedule_time,
+            "status": "pending"
+        })
+        
+        return {
+            "success": True,
+            "message": f"Scheduled for {schedule_time}",
+            "content_id": content_id
+        }
+    
+    def get_scheduled_posts(self):
+        """Get all scheduled posts"""
+        return self.scheduled
+    
+    def simulate_posting(self):
+        """Simulate posting due content"""
+        from datetime import datetime
+        now = datetime.now()
+        posted = []
+        
+        for post in self.scheduled[:]:
+            if post['scheduled_time'] <= now and post['status'] == 'pending':
+                post['status'] = 'posted'
+                post['posted_at'] = now
+                self.db.update_status(post['content_id'], 'published')
+                posted.append(post)
+        
+        return posted
 
 # ========== PAGE CONFIG ==========
 st.set_page_config(
@@ -43,7 +84,12 @@ def init_system():
     safety = SafetyController()
     workflow = ApprovalWorkflow(db)
     scheduler = PostingScheduler(db)
-    agent = ContentAgent(api_key=st.secrets.get("xai-tjxmN6LNyWbLPjC4d4BuJFxuEmLvghS55XXX6yPmjJRbZkL3v4Nc0fC4JBWqdXQyUljsdNzoOwxhBoRe"))
+    
+    import os
+    api_key = os.environ.get("GROQ_API_KEY") or os.environ.get("GROK_API_KEY")
+    agent = ContentAgent(api_key=api_key)
+    if not api_key:
+    st.sidebar.warning(" Set GROQ_API_KEY environment variable")
     
     return {
         "brand": brand_voice,
