@@ -16,120 +16,103 @@ class BrandVoice:
 
 class ContentAgent:
     def __init__(self, api_key: str = None):
-        self.api_key = api_key or os.environ.get("GROK_API_KEY")
+        # Try Groq first, then Grok
+        self.api_key = api_key or os.environ.get("GROQ_API_KEY") or os.environ.get("GROK_API_KEY")
         
-        # VERIFY KEY FORMAT
+        print(f"API Key: {'SET' if self.api_key else 'NOT SET'}")
         if self.api_key:
-            print(f"API Key found: {self.api_key[:15]}...")
-            if not self.api_key.startswith('xai-'):
-                print(f"WARNING: Key doesn't start with 'xai-'")
-        else:
-            print("NO API KEY FOUND")
-            print("   Set with: export GROK_API_KEY='xai-your-key-here'")
+            print(f"Key starts with: {self.api_key[:10]}...")
         
-        # CORRECT ENDPOINT for xAI
-        self.base_url = "https://api.x.ai/v1"
+        # Groq API endpoint (free tier available)
+        self.base_url = "https://api.groq.com/openai/v1"
         
     def generate_content(self, platform: str, topic: str, brand_voice: BrandVoice,
                         tone: Optional[str] = None, media_files: List = None) -> Dict:
         
-        print(f"GENERATING CONTENT")
-        print(f"   Platform: {platform}")
-        print(f"   Topic: {topic}")
-        print(f"   API Key valid: {bool(self.api_key and self.api_key.startswith('xai-'))}")
+        print(f"Generating {platform} content: {topic[:50]}...")
         
-        # If no valid API key, use fallback immediately
-        if not self.api_key or not self.api_key.startswith('xai-'):
-            print("   Using fallback (invalid/missing API key)")
-            return self._generate_fallback_content(platform, topic, brand_voice)
+        # Check if we should use API
+        use_api = bool(self.api_key and len(self.api_key) > 20)
         
-        try:
-            # Try real API call
-            prompt = self._construct_prompt(platform, topic, brand_voice, tone, None)
-            print(f"   Calling xAI API...")
-            
-            response_text = self._call_xai_api(prompt)
-            
-            print(f"   API call successful")
-            
-            # Parse response
-            content_data = self._parse_ai_response(response_text, platform)
-            
-            content_data["metadata"] = {
-                "generated_by": "xai_api",
-                "platform": platform,
-                "hashtags": content_data.get("hashtags", []),
-            }
-            
-            return content_data
-            
-        except Exception as e:
-            print(f"   API failed: {str(e)[:100]}")
-            return self._generate_fallback_content(platform, topic, brand_voice)
+        if use_api:
+            try:
+                prompt = self._construct_prompt(platform, topic, brand_voice, tone, None)
+                response = self._call_groq_api(prompt)
+                content_data = self._parse_response(response, platform)
+                
+                content_data["metadata"] = {
+                    "generated_by": "groq_api",
+                    "platform": platform,
+                    "hashtags": content_data.get("hashtags", []),
+                }
+                
+                return content_data
+                
+            except Exception as e:
+                print(f"API failed: {e}")
+                return self._generate_fallback(platform, topic, brand_voice)
+        
+        return self._generate_fallback(platform, topic, brand_voice)
     
     def _construct_prompt(self, platform: str, topic: str, brand_voice: BrandVoice,
                          tone: Optional[str], media_context: Optional[str]) -> str:
         
-        # SIMPLER PROMPT - More likely to work
         prompt = f"""Create a {platform} social media post about: {topic}
 
 Company: {brand_voice.company_name}
-Tone: {tone or brand_voice.tone}
-Target audience: {brand_voice.target_audience}
+Brand Tone: {tone or brand_voice.tone}
+Target Audience: {brand_voice.target_audience}
+Personality Traits: {', '.join(brand_voice.personality_traits)}
 
-Make it engaging and include 2-3 relevant hashtags.
-Add a question to engage the audience."""
+Platform Guidelines:
+- {platform}: Write in a {platform.lower()} style with appropriate length and format
+- Include 3-5 relevant hashtags
+- Add an engaging question for audience interaction
+- Keep it professional yet engaging
+
+Do NOT mention: {', '.join(brand_voice.forbidden_topics)}
+
+Format the post naturally for {platform}. Make it creative and platform-appropriate."""
         
         return prompt
     
-    def _call_xai_api(self, prompt: str) -> str:
-        """Call xAI API with proper error handling"""
+    def _call_groq_api(self, prompt: str) -> str:
+        """Call Groq API - free tier available"""
         
-        url = f"{self.base_url}/chat/completions"
+        if not self.api_key:
+            raise Exception("No API key")
         
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
         
-        # SIMPLER PAYLOAD - matches xAI documentation
+        # Groq supports multiple models - Mixtral is good and fast
         payload = {
             "messages": [
                 {"role": "user", "content": prompt}
             ],
-            "model": "grok-beta",
+            "model": "mixtral-8x7b-32768",  # Fast and good quality
             "temperature": 0.7,
             "max_tokens": 500
         }
         
-        print(f"   Request to: {url}")
+        response = requests.post(
+            f"{self.base_url}/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=30
+        )
         
-        try:
-            response = requests.post(
-                url,
-                headers=headers,
-                json=payload,
-                timeout=30
-            )
-            
-            print(f"   Response status: {response.status_code}")
-            
-            if response.status_code != 200:
-                print(f"   API Error {response.status_code}")
-                print(f"   Response: {response.text[:200]}")
-                raise Exception(f"API error {response.status_code}")
-            
-            response_json = response.json()
-            return response_json["choices"][0]["message"]["content"]
-            
-        except requests.exceptions.RequestException as e:
-            print(f"   Network error: {e}")
-            raise Exception(f"Network error: {e}")
+        if response.status_code != 200:
+            print(f"Groq API error {response.status_code}: {response.text[:200]}")
+            raise Exception(f"API error {response.status_code}")
+        
+        data = response.json()
+        return data["choices"][0]["message"]["content"]
     
-    def _parse_ai_response(self, response: str, platform: str) -> Dict:
+    def _parse_response(self, response: str, platform: str) -> Dict:
         """Parse API response"""
-        
-        # Just return the text as content
         return {
             "content": response,
             "hashtags": self._extract_hashtags(response),
@@ -139,36 +122,64 @@ Add a question to engage the audience."""
     
     def _extract_hashtags(self, text: str) -> List[str]:
         hashtags = re.findall(r'#\w+', text)
-        return list(set(hashtags))[:3]
+        return list(set(hashtags))[:5]
     
-    def _generate_fallback_content(self, platform: str, topic: str, 
-                                  brand_voice: BrandVoice) -> Dict:
-        """Better fallback that uses actual inputs"""
+    def _generate_fallback(self, platform: str, topic: str, brand_voice: BrandVoice) -> Dict:
+        """High-quality fallback template"""
         
         company = brand_voice.company_name
-        topic_words = topic.split()
-        main_topic = topic_words[0] if topic_words else topic[:20]
+        main_topic = topic.split()[0] if topic.split() else topic[:20].strip()
         
-        # Create dynamic content based on inputs
-        content = f"{topic}\n\n"
-        content += f"At {company}, we're examining the implications and opportunities in this space. "
-        content += f"Our analysis of {main_topic.lower()} reveals several key areas:\n\n"
-        content += "• Strategic implementation approaches\n"
-        content += "• Integration with existing systems\n"
-        content += "• Measuring return on investment\n"
-        content += "• Future developments and trends\n\n"
-        content += f"How is your organization approaching {main_topic.lower()}? "
-        content += "Share your insights and challenges in the comments.\n\n"
-        content += f"#{company.replace(' ', '')} #{main_topic.capitalize()} #BusinessStrategy #TechInnovation"
+        # Creative templates for each platform
+        templates = {
+            "linkedin": f"""**Deep Dive: {topic}**
+
+At {company}, we're examining how {main_topic.lower()} is transforming business operations. Our analysis reveals key insights:
+
+ **Strategic Impact**: Organizations implementing {main_topic.lower()} solutions report significant efficiency gains and competitive advantages.
+
+ **Implementation Roadmap**: Successful adoption requires careful planning, stakeholder alignment, and measurable milestones.
+
+ **Future Outlook**: The trajectory suggests accelerated adoption as technology matures and use cases expand.
+
+**Discussion Question**: What challenges or successes has your organization experienced with {main_topic.lower()} implementation?
+
+#{company.replace(' ', '')} #{main_topic.capitalize()} #DigitalTransformation #BusinessStrategy""",
+            
+            "twitter": f"""Exploring {topic}:
+
+• Market evolution and current trends
+• Key implementation considerations  
+• Measuring ROI and business impact
+
+What's your perspective on this space?
+
+#{main_topic.capitalize()} #Tech #Innovation #Business""",
+            
+            "instagram": f""" {topic}
+
+At {company}, we're passionate about how technology drives meaningful change. {main_topic.capitalize()} represents one of the most exciting areas of innovation today.
+
+Key considerations:
+• Strategic alignment
+• Technical integration
+• Value realization
+
+What tech innovation excites you most right now? Share below! 
+
+#{company.replace(' ', '')} #{main_topic.capitalize()} #TechInnovation #FutureForward"""
+        }
+        
+        content = templates.get(platform.lower(), templates["linkedin"])
         
         return {
             "content": content,
-            "hashtags": [f"#{company.replace(' ', '')}", f"#{main_topic.capitalize()}", "#Innovation"],
-            "engagement_question": f"What's your perspective on {main_topic.lower()}?",
+            "hashtags": self._extract_hashtags(content),
+            "engagement_question": f"What's your take on {main_topic.lower()}?",
             "optimal_post_time": "9:00 AM",
             "metadata": {
-                "generated_by": "fallback_template",
+                "generated_by": "creative_fallback",
                 "platform": platform,
-                "ai_notes": "Generated from improved fallback template"
+                "ai_notes": "Generated from creative template"
             }
         }
