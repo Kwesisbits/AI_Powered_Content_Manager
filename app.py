@@ -586,7 +586,7 @@ with tab5:
         activities = system["db"].get_recent_activities(limit=10)
         
         for activity in activities:
-            timestamp = activity['timestamp'].strftime('%H:%M')
+            timestamp = activity['timestamp'][11:16] if activity['timestamp'] else "--:--"
             st.caption(f"**{timestamp}** - {activity['action']}: {activity['details'][:50]}...")
         
         # Content performance (simulated)
