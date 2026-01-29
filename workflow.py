@@ -26,8 +26,8 @@ class ApprovalWorkflow:
         self.min_review_time = 30  # Minimum seconds between creation and approval
         
     def submit_for_approval(self, content_id: str) -> bool:
-    """Submit content for approval - HARD GATE"""
-    
+        """Submit content for approval - HARD GATE"""
+        
         # Get content
         content = self.db.get_content(content_id)
         if not content:
@@ -137,7 +137,6 @@ class ApprovalWorkflow:
             details=f"Content {content_id} needs revision: {notes[:50]}...",
             content_id=content_id
         )
-        
         
         try:
             # Get the original content
