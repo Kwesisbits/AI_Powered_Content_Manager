@@ -248,66 +248,84 @@ with tab1:
                     st.caption(file.name[:20])
         
         # Generate button with confirmation
-        if st.button(" Generate AI Content", type="primary", use_container_width=True):
-            if not topic:
-                st.error("Please enter a content brief")
-            else:
-                with st.spinner(" AI agent creating content..."):
-                    try:
-                        # Generate content using AI agent
-                        result = system["agent"].generate_content(
-                            platform=platform,
-                            topic=topic,
-                            brand_voice=system["brand"],
-                            tone=tone if tone != "Default" else None,
-                            media_files=uploaded_files
-                        )
-                        
-                        # Store in database
-                        content_id = system["db"].create_content(
-                            platform=platform,
-                            topic=topic,
-                            content=result["content"],
-                            metadata=result["metadata"],
-                            status="draft"
-                        )
-                        
-                        st.session_state.current_content_id = content_id
-                        
-                        # Show generated content
-                        st.success("AI Content Generated!")
-                        st.divider()
-                        
-                        st.subheader("Generated Content")
-                        st.write(result["content"])  # Changed from st.markdown() to st.write()
-                        
-                        if "hashtags" in result.get("metadata", {}):
-                            st.caption(f"**Hashtags:** {', '.join(result['metadata']['hashtags'])}")
-                        elif "hashtags" in result:
-                            st.caption(f"**Hashtags:** {', '.join(result['hashtags'])}")
-                                                
-                        # Action buttons
-                        col_a, col_b, col_c = st.columns(3)
-                        with col_a:
-                            if st.button(" Submit for Approval", use_container_width=True):
-                                system["workflow"].submit_for_approval(content_id)
-                                st.success("Submitted to approval queue!")
-                                time.sleep(1)
-                                st.rerun()
-                        with col_b:
-                            if st.button(" Edit & Resubmit", use_container_width=True):
-                                st.info("Edit interface would open here")
-                        with col_c:
-                            if st.button(" Discard", use_container_width=True, type="secondary"):
-                                system["db"].update_status(content_id, "discarded")
-                                st.info("Content discarded")
-                                st.rerun()
+        # Generate button with confirmation
+            if st.button("Generate AI Content", type="primary"):
+                if not topic:
+                    st.error("Please enter a content brief")
+                else:
+                    with st.spinner("AI agent creating content..."):
+                        try:
+                            # Get ALL advanced options
+                            advanced_options = {
+                                "tone": tone if tone != "Default" else None,
+                                "include_hashtags": include_hashtags,
+                                "include_question": include_question,
+                                "call_to_action": call_to_action if call_to_action != "None" else None
+                            }
+                            
+                            # Generate content using AI agent with ALL parameters
+                            result = system["agent"].generate_content(
+                                platform=platform,
+                                topic=topic,
+                                brand_voice=system["brand"],
+                                **advanced_options
+                            )
+                            
+                            # Store in database
+                            content_id = system["db"].create_content(
+                                platform=platform,
+                                topic=topic,
+                                content=result["content"],
+                                metadata=result["metadata"],
+                                status="draft"
+                            )
+                            
+                            st.session_state.current_content_id = content_id
+                            
+                            # Show generated content
+                            st.success(" AI Content Generated!")
+                            st.divider()
+                            
+                            # Display ALL information
+                            col1, col2 = st.columns([3, 1])
+                            
+                            with col1:
+                                st.subheader("Generated Content")
+                                st.write(result["content"])
+                            
+                            with col2:
+                                st.subheader("Details")
+                                st.write(f"**Company:** {result['metadata']['company']}")
+                                st.write(f"**Platform:** {result['metadata']['platform']}")
+                                st.write(f"**Tone:** {result['metadata']['tone']}")
+                                st.write(f"**Audience:** {result['metadata']['audience']}")
                                 
-                    except Exception as e:
-                        st.error(f" AI Generation failed: {str(e)}")
-                        st.info("Using fallback generation...")
-                        # Fallback generation logic
-    
+                                if result.get("hashtags"):
+                                    st.write(f"**Hashtags:** {', '.join(result['hashtags'])}")
+                                
+                                if result.get("engagement_question"):
+                                    st.write(f"**Question:** {result['engagement_question']}")
+                            
+                            # Action buttons
+                            col_a, col_b, col_c = st.columns(3)
+                            with col_a:
+                                if st.button("Submit for Approval"):
+                                    system["workflow"].submit_for_approval(content_id)
+                                    st.success("Submitted to approval queue!")
+                                    time.sleep(1)
+                                    st.rerun()
+                            with col_b:
+                                if st.button("Edit & Resubmit"):
+                                    st.info("Edit interface would open here")
+                            with col_c:
+                                if st.button("Discard", type="secondary"):
+                                    system["db"].update_status(content_id, "discarded")
+                                    st.info("Content discarded")
+                                    st.rerun()
+                                    
+                        except Exception as e:
+                            st.error(f"AI Generation failed: {str(e)}")
+                            st.info("Please check your GROQ_API_KEY environment variable and try again.")
     with col2:
         st.header("Recent Drafts")
         
