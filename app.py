@@ -164,10 +164,10 @@ with st.sidebar:
     # Get stats from database
     stats = system["db"].get_system_stats()
     
-    st.metric("Pending Approval", stats["pending"])
-    st.metric("Scheduled", stats["scheduled"])
-    st.metric("Published", stats["published"])
-    st.metric("AI Generations", stats["generated"])
+    st.metric("Pending Approval", 0)
+    st.metric("Scheduled", 0)
+    st.metric("Published", 0)
+    st.metric("AI Generations", 0)
 
 # ========== MAIN DASHBOARD ==========
 st.title(" AI Content Agent - Production System")
