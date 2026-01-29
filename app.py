@@ -58,7 +58,7 @@ class PostingScheduler:
 # ========== PAGE CONFIG ==========
 st.set_page_config(
     page_title="AI Content Agent - Production System",
-    page_icon="🤖",
+    page_icon="◼️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -93,7 +93,7 @@ def init_system():
     if not api_key:
         st.sidebar.warning(" Set GROQ_API_KEY environment variable for AI generation")
     else:
-        st.sidebar.success("✅ Groq API key loaded")
+        st.sidebar.success(" Groq API key loaded")
     
     return {
         "brand": brand_voice,
@@ -218,7 +218,7 @@ with tab1:
         )
         
         # Advanced options
-        with st.expander("⚙️ Advanced Options"):
+        with st.expander(" Advanced Options"):
             col_a, col_b = st.columns(2)
             with col_a:
                 tone = st.selectbox(
@@ -234,7 +234,7 @@ with tab1:
                 )
         
         # Media Upload Section
-        st.subheader("📸 Media Assets")
+        st.subheader(" Media Assets")
         
         uploaded_files = st.file_uploader(
             "Upload images/videos for this post",
