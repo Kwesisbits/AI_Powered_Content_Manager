@@ -279,7 +279,7 @@ class ContentDatabase:
             approval_record.get('comments', '')
         ))
         
-    
+        # Also update content status
         cursor.execute('''
             UPDATE content 
             SET status = 'approved', updated_at = CURRENT_TIMESTAMP
@@ -364,9 +364,37 @@ class ContentDatabase:
     
     def save_notification(self, notification: dict):
         """Save notification (for future email/Slack integration)"""
-        
+        # For now, just print it
         print(f"Notification: {notification}")
     
     def get_content_by_id(self, content_id: int) -> Optional[Dict]:
         """Alias for get_content for consistency"""
         return self.get_content(content_id)
+    
+    def get_revisions_of_content(self, content_id: int) -> List[Dict]:
+        """Get all revisions of a specific content"""
+        
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT * FROM content 
+            WHERE metadata LIKE ? OR metadata LIKE ?
+            ORDER BY created_at DESC
+        ''', (f'%"revision_of": {content_id}%', f'%"revision_of":"{content_id}"%'))
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        result = []
+        for row in rows:
+            content = dict(row)
+            if content.get('metadata'):
+                try:
+                    content['metadata'] = json.loads(content['metadata'])
+                except:
+                    content['metadata'] = {}
+            result.append(content)
+        
+        return result
