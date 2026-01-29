@@ -1,6 +1,5 @@
 import os
 import requests
-import json
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 import re
@@ -17,84 +16,131 @@ class BrandVoice:
 class ContentAgent:
     def __init__(self, api_key: str = None):
         self.api_key = api_key or os.environ.get("GROQ_API_KEY")
-        self.base_url = "https://api.groq.com/openai/v1"
-        
-        print(f"Agent initialized with key: {'YES' if self.api_key else 'NO'}")
-        
-    def generate_content(self, platform: str, topic: str, brand_voice: BrandVoice,
-                        tone: Optional[str] = None, media_files: List = None) -> Dict:
-        """Generate AI content - SIMPLIFIED VERSION"""
-        
-        print(f"\n=== GENERATING CONTENT ===")
-        print(f"Platform: {platform}")
-        print(f"Topic: {topic}")
-        print(f"Company: {brand_voice.company_name}")
-        
-        # If no API key, use minimal fallback
         if not self.api_key:
-            print("No API key - using simple fallback")
-            return self._simple_fallback(platform, topic, brand_voice)
+            raise ValueError("GROQ_API_KEY environment variable is required")
         
+        self.base_url = "https://api.groq.com/openai/v1"
+        print(f"✓ Agent initialized for {self.base_url}")
+    
+    def generate_content(self, platform: str, topic: str, brand_voice: BrandVoice,
+                        tone: Optional[str] = None, include_hashtags: bool = True,
+                        include_question: bool = True, call_to_action: str = None) -> Dict:
+        """
+        Generate AI content - NO FALLBACK - API CALL ONLY
+        """
+        
+        # Build detailed prompt with ALL parameters
+        prompt = self._build_complete_prompt(
+            platform=platform,
+            topic=topic,
+            brand_voice=brand_voice,
+            tone=tone,
+            include_hashtags=include_hashtags,
+            include_question=include_question,
+            call_to_action=call_to_action
+        )
+        
+        print(f"\n🔧 SENDING TO API:")
+        print(f"   Company: {brand_voice.company_name}")
+        print(f"   Platform: {platform}")
+        print(f"   Tone: {tone or brand_voice.tone}")
+        print(f"   Topic: {topic[:50]}...")
+        
+        # CALL API - NO FALLBACK
         try:
-            # Create prompt
-            prompt = f"""Create a creative, engaging {platform} social media post about: {topic}
+            response = self._call_groq_api(prompt)
             
-Company: {brand_voice.company_name}
-Brand Voice: {brand_voice.tone}
-Audience: {brand_voice.target_audience}
-Key Traits: {', '.join(brand_voice.personality_traits)}
-
-Make it:
-1. Platform-appropriate for {platform}
-2. Include 3-5 relevant hashtags
-3. Add a thought-provoking question
-4. Be creative and insightful
-5. Don't use placeholders like "Key insight 1" - provide actual insights
-
-Write naturally as a social media post, not in JSON format."""
-            
-            # Call API
-            print("Calling Groq API...")
-            response = self._call_api(prompt)
-            
-            # Process response
-            content = response.strip()
-            print(f"API Response received ({len(content)} chars)")
-            
-            # Extract hashtags
-            hashtags = re.findall(r'#\w+', content)
+            # Extract hashtags from response
+            hashtags = re.findall(r'#\w+', response)
             hashtags = list(set(hashtags))[:5]
             
-            # If no hashtags in response, add some
-            if not hashtags:
-                main_word = topic.split()[0].lower() if topic.split() else "innovation"
+            # If no hashtags in response but they were requested, add some
+            if include_hashtags and not hashtags:
+                main_word = topic.split()[0].lower() if topic.split() else "topic"
                 hashtags = [f"#{brand_voice.company_name.replace(' ', '')}", 
-                          f"#{main_word.capitalize()}", "#TechInnovation"]
+                          f"#{main_word.capitalize()}", "#Innovation"]
             
-            # Return result
+            # Build result
             result = {
-                "content": content,
+                "content": response.strip(),
                 "hashtags": hashtags,
-                "engagement_question": "What are your thoughts?",
-                "optimal_post_time": "9:00 AM",
+                "engagement_question": self._extract_question(response) if include_question else "",
+                "optimal_post_time": self._get_optimal_time(platform),
                 "metadata": {
                     "generated_by": "groq_api",
+                    "company": brand_voice.company_name,
                     "platform": platform,
                     "tone": tone or brand_voice.tone,
-                    "word_count": len(content.split())
+                    "audience": brand_voice.target_audience,
+                    "word_count": len(response.split())
                 }
             }
             
-            print("Content generation successful")
+            print(f"✓ API Success: {len(response)} characters")
             return result
             
         except Exception as e:
-            print(f"API Error: {e}")
-            # Use better fallback
-            return self._creative_fallback(platform, topic, brand_voice)
+            # CRITICAL ERROR - No fallback, show error
+            print(f"✗ API CRITICAL ERROR: {e}")
+            raise Exception(f"API Generation Failed: {str(e)}. Check your GROQ_API_KEY and internet connection.")
     
-    def _call_api(self, prompt: str) -> str:
-        """Simple API call"""
+    def _build_complete_prompt(self, platform: str, topic: str, brand_voice: BrandVoice,
+                              tone: Optional[str], include_hashtags: bool,
+                              include_question: bool, call_to_action: str) -> str:
+        """Build comprehensive prompt with ALL parameters"""
+        
+        # Platform-specific instructions
+        platform_guides = {
+            "LinkedIn": "Professional, business-focused, 150-300 words, industry insights, thought leadership",
+            "Twitter": "Concise, engaging, under 280 characters, conversational, use emojis sparingly",
+            "Instagram": "Visual-first, engaging storytelling, 100-150 words, use emojis, ask questions",
+            "Facebook": "Community-focused, conversational, 100-200 words, encourage comments and shares"
+        }
+        
+        platform_guide = platform_guides.get(platform, "Professional social media post")
+        
+        # Build prompt parts
+        prompt_parts = [
+            f"Create a {platform} social media post about: {topic}",
+            "",
+            "=== COMPANY BRAND VOICE ===",
+            f"Company Name: {brand_voice.company_name}",
+            f"Brand Tone: {tone or brand_voice.tone}",
+            f"Personality Traits: {', '.join(brand_voice.personality_traits)}",
+            f"Target Audience: {brand_voice.target_audience}",
+            f"Content Focus Areas: {', '.join(brand_voice.content_pillars)}",
+            f"Avoid These Topics: {', '.join(brand_voice.forbidden_topics)}",
+            "",
+            f"=== PLATFORM REQUIREMENTS ===",
+            f"Platform: {platform}",
+            f"Style: {platform_guide}",
+            "",
+            "=== CONTENT REQUIREMENTS ===",
+            "1. Write in the exact brand tone specified above",
+            "2. Address the target audience directly",
+            "3. Include specific, actionable insights (not generic statements)",
+            "4. Sound like a real expert in this field",
+            "",
+            "=== FORMATTING ===",
+            "Use appropriate line breaks and formatting for the platform.",
+            f"{'Include 3-5 relevant hashtags' if include_hashtags else 'Do not include hashtags'}",
+            f"{'Include an engaging question for audience interaction' if include_question else ''}",
+            f"{f'Include a call-to-action about: {call_to_action}' if call_to_action else ''}",
+            "",
+            "=== CRITICAL INSTRUCTIONS ===",
+            "DO NOT use placeholder text like 'Key insight 1' or generic statements",
+            "DO reference the company name naturally in the content",
+            "DO adapt the tone exactly as specified",
+            "DO provide specific insights about the topic",
+            "DO format it ready-to-post on the specified platform",
+            "",
+            "Now create the post:"
+        ]
+        
+        return "\n".join(prompt_parts)
+    
+    def _call_groq_api(self, prompt: str) -> str:
+        """Call Groq API with error handling"""
         
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -102,10 +148,20 @@ Write naturally as a social media post, not in JSON format."""
         }
         
         payload = {
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are a professional social media content creator who follows brand guidelines precisely."
+                },
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
             "model": "mixtral-8x7b-32768",
             "temperature": 0.8,  # More creative
-            "max_tokens": 400
+            "max_tokens": 500,
+            "max_completion_tokens": 400
         }
         
         response = requests.post(
@@ -116,72 +172,29 @@ Write naturally as a social media post, not in JSON format."""
         )
         
         if response.status_code != 200:
-            raise Exception(f"API error {response.status_code}: {response.text[:100]}")
+            error_msg = f"API Error {response.status_code}"
+            try:
+                error_data = response.json()
+                if 'error' in error_data:
+                    error_msg += f": {error_data['error'].get('message', 'Unknown error')}"
+            except:
+                error_msg += f": {response.text[:100]}"
+            raise Exception(error_msg)
         
         data = response.json()
         return data["choices"][0]["message"]["content"]
     
-    def _simple_fallback(self, platform: str, topic: str, brand_voice: BrandVoice) -> Dict:
-        """Absolute simplest fallback"""
-        content = f"Exploring {topic} at {brand_voice.company_name}. #Innovation #Tech"
-        return {
-            "content": content,
-            "hashtags": ["#Innovation", "#Tech"],
-            "metadata": {"generated_by": "simple_fallback"}
-        }
+    def _extract_question(self, text: str) -> str:
+        """Extract question from text"""
+        sentences = text.replace('?', '?|').replace('!', '!|').replace('.', '.|').split('|')
+        questions = [s.strip() for s in sentences if '?' in s]
+        return questions[0] if questions else "What are your thoughts?"
     
-    def _creative_fallback(self, platform: str, topic: str, brand_voice: BrandVoice) -> Dict:
-        """Creative fallback that actually generates content"""
-        
-        import random
-        
-        company = brand_voice.company_name
-        topic_lower = topic.lower()
-        
-        # Different intro templates
-        intros = [
-            f" Exciting developments in {topic_lower}!",
-            f" Deep dive into {topic_lower} today.",
-            f" Analyzing the impact of {topic_lower}.",
-            f" Exploring innovations in {topic_lower}."
-        ]
-        
-        # Different insights
-        insights = [
-            f"Organizations implementing {topic_lower} solutions report significant efficiency gains.",
-            f"The adoption curve for {topic_lower} is accelerating across industries.",
-            f"{topic_lower} represents one of the most transformative technologies today.",
-            f"Successful {topic_lower} implementation requires strategic planning and execution."
-        ]
-        
-        # Different questions
-        questions = [
-            f"What's been your experience with {topic_lower}?",
-            f"How is your organization approaching {topic_lower}?",
-            f"What challenges have you faced with {topic_lower} implementation?",
-            f"Where do you see {topic_lower} making the biggest impact?"
-        ]
-        
-        # Build content
-        content = f"{random.choice(intros)}\n\n"
-        content += f"At {company}, we're seeing {topic_lower} reshape business landscapes. "
-        content += f"{random.choice(insights)}\n\n"
-        content += f"Key considerations:\n• Strategic alignment\n• Technical integration\n• ROI measurement\n• Future scalability\n\n"
-        content += f"{random.choice(questions)}\n\n"
-        content += f"#{company.replace(' ', '')} #{topic.split()[0].capitalize() if topic.split() else 'Innovation'} #BusinessStrategy"
-        
-        hashtags = [f"#{company.replace(' ', '')}", 
-                   f"#{topic.split()[0].capitalize() if topic.split() else 'Innovation'}", 
-                   "#BusinessStrategy", "#Tech"]
-        
-        return {
-            "content": content,
-            "hashtags": hashtags,
-            "engagement_question": random.choice(questions),
-            "optimal_post_time": "9:00 AM",
-            "metadata": {
-                "generated_by": "creative_fallback",
-                "platform": platform,
-                "ai_notes": "Generated with creative variation"
-            }
+    def _get_optimal_time(self, platform: str) -> str:
+        times = {
+            "LinkedIn": "8:30 AM",
+            "Twitter": "12:00 PM", 
+            "Instagram": "5:00 PM",
+            "Facebook": "9:00 AM"
         }
+        return times.get(platform, "10:00 AM")
