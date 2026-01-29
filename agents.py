@@ -16,43 +16,55 @@ class BrandVoice:
 
 class ContentAgent:
     def __init__(self, api_key: str = None):
-        # Try Groq first, then Grok
         self.api_key = api_key or os.environ.get("GROQ_API_KEY") or os.environ.get("GROK_API_KEY")
         
-        print(f"API Key: {'SET' if self.api_key else 'NOT SET'}")
+        print(f"DEBUG: API Key provided: {'YES' if self.api_key else 'NO'}")
         if self.api_key:
-            print(f"Key starts with: {self.api_key[:10]}...")
+            print(f"DEBUG: Key value: {self.api_key[:15]}...")
+            print(f"DEBUG: Key starts with gsk_: {self.api_key.startswith('gsk_')}")
+            print(f"DEBUG: Key starts with xai-: {self.api_key.startswith('xai-')}")
         
-        # Groq API endpoint (free tier available)
+        # Groq API endpoint
         self.base_url = "https://api.groq.com/openai/v1"
         
     def generate_content(self, platform: str, topic: str, brand_voice: BrandVoice,
                         tone: Optional[str] = None, media_files: List = None) -> Dict:
         
-        print(f"Generating {platform} content: {topic[:50]}...")
+        print(f"DEBUG: Generating content for {platform}")
+        print(f"DEBUG: Topic: {topic}")
+        print(f"DEBUG: API Key available: {'YES' if self.api_key else 'NO'}")
         
-        # Check if we should use API
-        use_api = bool(self.api_key and len(self.api_key) > 20)
+        # Check if we have ANY API key (Groq or xAI)
+        if not self.api_key:
+            print("DEBUG: No API key, using fallback")
+            return self._generate_fallback_content(platform, topic, brand_voice)
         
-        if use_api:
-            try:
-                prompt = self._construct_prompt(platform, topic, brand_voice, tone, None)
-                response = self._call_groq_api(prompt)
-                content_data = self._parse_response(response, platform)
-                
-                content_data["metadata"] = {
-                    "generated_by": "groq_api",
-                    "platform": platform,
-                    "hashtags": content_data.get("hashtags", []),
-                }
-                
-                return content_data
-                
-            except Exception as e:
-                print(f"API failed: {e}")
-                return self._generate_fallback(platform, topic, brand_voice)
-        
-        return self._generate_fallback(platform, topic, brand_voice)
+        # Try to call the API regardless of prefix
+        try:
+            print("DEBUG: Constructing prompt...")
+            prompt = self._construct_prompt(platform, topic, brand_voice, tone, None)
+            
+            print("DEBUG: Calling Groq API...")
+            response_text = self._call_groq_api(prompt)
+            
+            print("DEBUG: API call successful!")
+            print(f"DEBUG: Response length: {len(response_text)} chars")
+            
+            # Parse response
+            content_data = self._parse_ai_response(response_text, platform)
+            
+            content_data["metadata"] = {
+                "generated_by": "groq_api",
+                "platform": platform,
+                "hashtags": content_data.get("hashtags", []),
+            }
+            
+            return content_data
+            
+        except Exception as e:
+            print(f"DEBUG: API failed: {str(e)}")
+            print("DEBUG: Using fallback content")
+            return self._generate_fallback_content(platform, topic, brand_voice)
     
     def _construct_prompt(self, platform: str, topic: str, brand_voice: BrandVoice,
                          tone: Optional[str], media_context: Optional[str]) -> str:
@@ -62,57 +74,64 @@ class ContentAgent:
 Company: {brand_voice.company_name}
 Brand Tone: {tone or brand_voice.tone}
 Target Audience: {brand_voice.target_audience}
-Personality Traits: {', '.join(brand_voice.personality_traits)}
+Content Pillars: {', '.join(brand_voice.content_pillars)}
+Forbidden Topics: {', '.join(brand_voice.forbidden_topics)}
 
-Platform Guidelines:
-- {platform}: Write in a {platform.lower()} style with appropriate length and format
-- Include 3-5 relevant hashtags
-- Add an engaging question for audience interaction
-- Keep it professional yet engaging
-
-Do NOT mention: {', '.join(brand_voice.forbidden_topics)}
-
-Format the post naturally for {platform}. Make it creative and platform-appropriate."""
+Make it engaging, professional, and platform-appropriate. Include 3-5 relevant hashtags.
+Add a question to engage the audience. Provide valuable insights about the topic."""
         
         return prompt
     
     def _call_groq_api(self, prompt: str) -> str:
-        """Call Groq API - free tier available"""
+        """Call Groq API"""
         
         if not self.api_key:
-            raise Exception("No API key")
+            raise Exception("No API key provided")
+        
+        url = f"{self.base_url}/chat/completions"
         
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
         
-        # Groq supports multiple models - Mixtral is good and fast
         payload = {
             "messages": [
                 {"role": "user", "content": prompt}
             ],
-            "model": "mixtral-8x7b-32768",  # Fast and good quality
+            "model": "mixtral-8x7b-32768",
             "temperature": 0.7,
             "max_tokens": 500
         }
         
+        print(f"DEBUG: Sending request to: {url}")
+        print(f"DEBUG: Payload keys: {list(payload.keys())}")
+        
         response = requests.post(
-            f"{self.base_url}/chat/completions",
+            url,
             headers=headers,
             json=payload,
             timeout=30
         )
         
+        print(f"DEBUG: Response status: {response.status_code}")
+        
         if response.status_code != 200:
-            print(f"Groq API error {response.status_code}: {response.text[:200]}")
+            print(f"DEBUG: Response error: {response.text[:200]}")
             raise Exception(f"API error {response.status_code}")
         
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
+        response_json = response.json()
+        
+        # Debug the response structure
+        print(f"DEBUG: Response keys: {list(response_json.keys())}")
+        if 'choices' in response_json:
+            print(f"DEBUG: Number of choices: {len(response_json['choices'])}")
+        
+        return response_json["choices"][0]["message"]["content"]
     
-    def _parse_response(self, response: str, platform: str) -> Dict:
+    def _parse_ai_response(self, response: str, platform: str) -> Dict:
         """Parse API response"""
+        
         return {
             "content": response,
             "hashtags": self._extract_hashtags(response),
@@ -122,64 +141,35 @@ Format the post naturally for {platform}. Make it creative and platform-appropri
     
     def _extract_hashtags(self, text: str) -> List[str]:
         hashtags = re.findall(r'#\w+', text)
-        return list(set(hashtags))[:5]
+        return list(set(hashtags))[:3]
     
-    def _generate_fallback(self, platform: str, topic: str, brand_voice: BrandVoice) -> Dict:
-        """High-quality fallback template"""
+    def _generate_fallback_content(self, platform: str, topic: str, 
+                                  brand_voice: BrandVoice) -> Dict:
+        """Fallback content - will only be used if API completely fails"""
         
         company = brand_voice.company_name
-        main_topic = topic.split()[0] if topic.split() else topic[:20].strip()
+        topic_words = topic.split()
+        main_topic = topic_words[0] if topic_words else topic[:20]
         
-        # Creative templates for each platform
-        templates = {
-            "linkedin": f"""**Deep Dive: {topic}**
-
-At {company}, we're examining how {main_topic.lower()} is transforming business operations. Our analysis reveals key insights:
-
- **Strategic Impact**: Organizations implementing {main_topic.lower()} solutions report significant efficiency gains and competitive advantages.
-
- **Implementation Roadmap**: Successful adoption requires careful planning, stakeholder alignment, and measurable milestones.
-
- **Future Outlook**: The trajectory suggests accelerated adoption as technology matures and use cases expand.
-
-**Discussion Question**: What challenges or successes has your organization experienced with {main_topic.lower()} implementation?
-
-#{company.replace(' ', '')} #{main_topic.capitalize()} #DigitalTransformation #BusinessStrategy""",
-            
-            "twitter": f"""Exploring {topic}:
-
-• Market evolution and current trends
-• Key implementation considerations  
-• Measuring ROI and business impact
-
-What's your perspective on this space?
-
-#{main_topic.capitalize()} #Tech #Innovation #Business""",
-            
-            "instagram": f""" {topic}
-
-At {company}, we're passionate about how technology drives meaningful change. {main_topic.capitalize()} represents one of the most exciting areas of innovation today.
-
-Key considerations:
-• Strategic alignment
-• Technical integration
-• Value realization
-
-What tech innovation excites you most right now? Share below! 
-
-#{company.replace(' ', '')} #{main_topic.capitalize()} #TechInnovation #FutureForward"""
-        }
-        
-        content = templates.get(platform.lower(), templates["linkedin"])
+        content = f"{topic}\n\n"
+        content += f"At {company}, we're exploring this important area. "
+        content += f"Our analysis of {main_topic.lower()} reveals several key areas:\n\n"
+        content += "• Strategic implementation approaches\n"
+        content += "• Integration with existing systems\n"
+        content += "• Measuring return on investment\n"
+        content += "• Future developments and trends\n\n"
+        content += f"How is your organization approaching {main_topic.lower()}? "
+        content += "Share your insights and challenges in the comments.\n\n"
+        content += f"#{company.replace(' ', '')} #{main_topic.capitalize()} #BusinessStrategy #TechInnovation"
         
         return {
             "content": content,
-            "hashtags": self._extract_hashtags(content),
-            "engagement_question": f"What's your take on {main_topic.lower()}?",
+            "hashtags": [f"#{company.replace(' ', '')}", f"#{main_topic.capitalize()}", "#Innovation"],
+            "engagement_question": f"What's your perspective on {main_topic.lower()}?",
             "optimal_post_time": "9:00 AM",
             "metadata": {
-                "generated_by": "creative_fallback",
+                "generated_by": "fallback_template",
                 "platform": platform,
-                "ai_notes": "Generated from creative template"
+                "ai_notes": "Generated from fallback template"
             }
         }
