@@ -26,15 +26,16 @@ class ApprovalWorkflow:
         self.min_review_time = 30  # Minimum seconds between creation and approval
         
     def submit_for_approval(self, content_id: str) -> bool:
-        """Submit content for approval - HARD GATE"""
-        
+    """Submit content for approval - HARD GATE"""
+    
         # Get content
         content = self.db.get_content(content_id)
         if not content:
+            print(f"Error: Content {content_id} not found")
             return False
         
-        # Update state
-        self.db.update_status(content_id, ContentState.PENDING_REVIEW.value)
+        # Update state to 'pending_approval' (not 'pending_review')
+        self.db.update_status(content_id, "pending_approval")
         
         # Log submission
         self.db.log_activity(
@@ -46,8 +47,9 @@ class ApprovalWorkflow:
         # Simulate notification
         self._send_notification(content_id, "submitted")
         
+        print(f"Content {content_id} submitted to approval queue")
         return True
-    
+        
     def approve(self, content_id: str, approver: str, comments: str = "") -> bool:
         """Approve content - explicit human approval required"""
         
@@ -117,7 +119,7 @@ class ApprovalWorkflow:
         """Send content back for AI revision"""
         
         # Update state
-        self.db.update_status(content_id, ContentState.NEEDS_REVISION.value)
+        self.db.update_status(content_id, "needs_revision")
         
         # Record revision request
         revision_record = {
@@ -136,10 +138,18 @@ class ApprovalWorkflow:
             content_id=content_id
         )
         
-        # TODO: Trigger AI to revise based on notes
+        
+        try:
+            # Get the original content
+            content = self.db.get_content(content_id)
+            if content:
+                print(f"Revision requested for content {content_id}. Notes: {notes}")
+                print("In production, this would trigger AI to regenerate content.")
+        except Exception as e:
+            print(f"Error during revision: {e}")
         
         return True
-    
+        
     def _send_notification(self, content_id: str, action: str, extra_info: str = ""):
         """Simulate notification system"""
         print(f" NOTIFICATION: Content {content_id} was {action}. {extra_info}")
