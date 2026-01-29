@@ -23,7 +23,7 @@ class BrandVoice:
 
 class ContentAgent:
     def __init__(self, api_key: str):
-        self.api_key = "xai-tjxmN6LNyWbLPjC4d4BuJFxuEmLvghS55XXX6yPmjJRbZkL3v4Nc0fC4JBWqdXQyUljsdNzoOwxhBoRe"
+        self.api_key = api_key or os.environ.get("GROQ_API_KEY") or os.environ.get("GROK_API_KEY")
         
         
         # Platform-specific templates
