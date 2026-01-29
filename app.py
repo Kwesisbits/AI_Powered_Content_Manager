@@ -86,10 +86,16 @@ def init_system():
     scheduler = PostingScheduler(db)
     
     import os
-    api_key = os.environ.get("GROQ_API_KEY") 
+    api_key = os.environ.get("GROQ_API_KEY")
+    print(f"DEBUG in app.py: GROQ_API_KEY = {'SET' if api_key else 'NOT SET'}")
+    if api_key:
+        print(f"DEBUG in app.py: Key starts with gsk_: {api_key.startswith('gsk_')}")
+    
     agent = ContentAgent(api_key=api_key)
     if not api_key:
-        st.sidebar.warning("Set GROQ_API_KEY environment variable")
+        st.sidebar.warning("Set GROQ_API_KEY environment variable for AI generation")
+    else:
+        st.sidebar.success("Groq API key loaded")
     
     return {
         "brand": brand_voice,
