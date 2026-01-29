@@ -40,7 +40,7 @@ class ContentAgent:
             call_to_action=call_to_action
         )
         
-        print(f"\n🔧 SENDING TO API:")
+        print(f"\n SENDING TO API:")
         print(f"   Company: {brand_voice.company_name}")
         print(f"   Platform: {platform}")
         print(f"   Tone: {tone or brand_voice.tone}")
@@ -158,7 +158,7 @@ class ContentAgent:
                     "content": prompt
                 }
             ],
-            "model": "mixtral-8x7b-32768",
+            "model": "mistral-saba-24b",
             "temperature": 0.8,  # More creative
             "max_tokens": 500,
             "max_completion_tokens": 400
