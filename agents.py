@@ -158,7 +158,7 @@ class ContentAgent:
                     "content": prompt
                 }
             ],
-            "model": "mistral-saba-24b",
+            "model": "llama-3.3-70b-versatile",
             "temperature": 0.8,  # More creative
             "max_tokens": 500,
             "max_completion_tokens": 400
