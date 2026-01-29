@@ -86,16 +86,12 @@ def init_system():
     scheduler = PostingScheduler(db)
     
     import os
-    api_key = os.environ.get("GROQ_API_KEY")
-    print(f"DEBUG in app.py: GROQ_API_KEY = {'SET' if api_key else 'NOT SET'}")
-    if api_key:
-        print(f"DEBUG in app.py: Key starts with gsk_: {api_key.startswith('gsk_')}")
-    
+    api_key = os.environ.get("GROQ_API_KEY") or os.environ.get("GROK_API_KEY")
     agent = ContentAgent(api_key=api_key)
     if not api_key:
-        st.sidebar.warning("Set GROQ_API_KEY environment variable for AI generation")
+        st.sidebar.warning(" Set GROQ_API_KEY environment variable for AI generation")
     else:
-        st.sidebar.success("Groq API key loaded")
+        st.sidebar.success(" Groq API key loaded")
     
     return {
         "brand": brand_voice,
@@ -155,7 +151,7 @@ with st.sidebar:
     
     # Brand Configuration
     st.divider()
-    st.subheader("Brand Voice")
+    st.subheader("🏢 Brand Voice")
     
     with st.expander("Configure Brand", expanded=False):
         st.text_input("Company Name", value=system["brand"].company_name)
@@ -165,7 +161,7 @@ with st.sidebar:
     
     # System Status
     st.divider()
-    st.subheader(" System Status")
+    st.subheader("System Status")
     
     # Get stats from database
     stats = system["db"].get_system_stats()
@@ -181,10 +177,10 @@ st.caption("Enterprise-grade AI automation with human-in-the-loop controls")
 
 # Tabs with proper workflow
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    " Create", 
-    " Review", 
-    " Approve", 
-    " Schedule", 
+    "Create", 
+    "Review", 
+    "Approve", 
+    "Schedule", 
     " Monitor"
 ])
 
@@ -211,7 +207,7 @@ with tab1:
         )
         
         # Advanced options
-        with st.expander(" Advanced Options"):
+        with st.expander("⚙️ Advanced Options"):
             col_a, col_b = st.columns(2)
             with col_a:
                 tone = st.selectbox(
@@ -227,7 +223,7 @@ with tab1:
                 )
         
         # Media Upload Section
-        st.subheader("📸 Media Assets")
+        st.subheader(" Media Assets")
         
         uploaded_files = st.file_uploader(
             "Upload images/videos for this post",
@@ -247,22 +243,23 @@ with tab1:
                         st.video(file)
                     st.caption(file.name[:20])
         
-        
-        if st.button("Generate AI Content", type="primary"):
+        # Generate button with confirmation
+        if st.button(" Generate AI Content", type="primary"):
             if not topic:
                 st.error("Please enter a content brief")
             else:
-                with st.spinner("AI agent creating content..."):
+                with st.spinner(" AI agent creating content..."):
                     try:
                         # Get ALL advanced options
                         advanced_options = {
                             "tone": tone if tone != "Default" else None,
                             "include_hashtags": include_hashtags,
                             "include_question": include_question,
-                            "call_to_action": call_to_action if call_to_action != "None" else None
+                            "call_to_action": call_to_action if call_to_action != "None" else None,
+                            "media_files": uploaded_files if uploaded_files else None
                         }
                         
-                        # Generate content using AI agent with ALL parameters
+                        # Generate content using AI agent
                         result = system["agent"].generate_content(
                             platform=platform,
                             topic=topic,
@@ -286,13 +283,13 @@ with tab1:
                         st.divider()
                         
                         # Display ALL information
-                        col1, col2 = st.columns([3, 1])
+                        col1_display, col2_display = st.columns([3, 1])
                         
-                        with col1:
+                        with col1_display:
                             st.subheader("Generated Content")
                             st.write(result["content"])
                         
-                        with col2:
+                        with col2_display:
                             st.subheader("Details")
                             st.write(f"**Company:** {result['metadata']['company']}")
                             st.write(f"**Platform:** {result['metadata']['platform']}")
@@ -308,16 +305,16 @@ with tab1:
                         # Action buttons
                         col_a, col_b, col_c = st.columns(3)
                         with col_a:
-                            if st.button("Submit for Approval"):
+                            if st.button(" Submit for Approval", use_container_width=True):
                                 system["workflow"].submit_for_approval(content_id)
                                 st.success("Submitted to approval queue!")
                                 time.sleep(1)
                                 st.rerun()
                         with col_b:
-                            if st.button("Edit & Resubmit"):
+                            if st.button(" Edit & Resubmit", use_container_width=True):
                                 st.info("Edit interface would open here")
                         with col_c:
-                            if st.button("Discard", type="secondary"):
+                            if st.button(" Discard", use_container_width=True, type="secondary"):
                                 system["db"].update_status(content_id, "discarded")
                                 st.info("Content discarded")
                                 st.rerun()
@@ -325,7 +322,7 @@ with tab1:
                     except Exception as e:
                         st.error(f" AI Generation failed: {str(e)}")
                         st.info("Please check your GROQ_API_KEY environment variable and try again.")
-            
+    
     with col2:
         st.header("Recent Drafts")
         
@@ -337,7 +334,12 @@ with tab1:
         else:
             for draft in recent_drafts:
                 with st.expander(f"{draft['platform']}: {draft['topic'][:30]}..."):
-                    st.markdown(draft['content'][:200] + "...")
+                    # Handle content display
+                    content_to_show = draft.get('content', '')
+                    if isinstance(content_to_show, dict):
+                        content_to_show = content_to_show.get('content', 'No content')
+                    
+                    st.write(content_to_show[:200] + "...")
                     st.caption(f"Status: {draft['status']} | Created: {draft['created_at']}")
                     
                     if draft['status'] == 'draft':
@@ -358,8 +360,8 @@ with tab2:
     st.header(" Content Review Queue")
     st.caption("Content pending review before approval")
     
-    # Get content needing review
-    review_queue = system["db"].get_content_by_status("pending_review")
+    # Get content needing review - FIXED to show 'pending_approval'
+    review_queue = system["db"].get_content_by_status("pending_approval")
     
     if not review_queue:
         st.info(" No content pending review")
@@ -372,15 +374,25 @@ with tab2:
                 with col1:
                     st.subheader(f"{item['platform'].upper()}: {item['topic']}")
                     
-                    # Content preview
+                    # Content preview - FIX content display
+                    content_to_show = item.get('content', '')
+                    if isinstance(content_to_show, dict):
+                        content_to_show = content_to_show.get('content', 'No content')
+                    
                     with st.expander("View Full Content", expanded=False):
-                        st.markdown(item['content'])
+                        st.write(content_to_show)
                         
-                        if item.get('metadata') and 'hashtags' in item['metadata']:
-                            st.caption(f"**Hashtags:** {', '.join(item['metadata']['hashtags'])}")
-                        
-                        if item.get('metadata') and 'ai_notes' in item['metadata']:
-                            st.info(f" AI Notes: {item['metadata']['ai_notes']}")
+                        # Handle metadata display
+                        if item.get('metadata'):
+                            if isinstance(item['metadata'], str):
+                                try:
+                                    metadata = json.loads(item['metadata'])
+                                    if 'hashtags' in metadata:
+                                        st.caption(f"**Hashtags:** {', '.join(metadata['hashtags'])}")
+                                except:
+                                    pass
+                            elif isinstance(item['metadata'], dict) and 'hashtags' in item['metadata']:
+                                st.caption(f"**Hashtags:** {', '.join(item['metadata']['hashtags'])}")
                 
                 with col2:
                     st.caption(f"ID: {item['id']}")
@@ -414,12 +426,23 @@ with tab3:
             
             with col1:
                 # Content display
-                st.markdown(content['content'])
+                content_to_show = content.get('content', '')
+                if isinstance(content_to_show, dict):
+                    content_to_show = content_to_show.get('content', 'No content')
+                
+                st.write(content_to_show)
                 
                 # AI Analysis
                 with st.expander(" AI Analysis", expanded=True):
                     if content.get('metadata'):
-                        st.json(content['metadata'], expanded=False)
+                        try:
+                            if isinstance(content['metadata'], str):
+                                metadata = json.loads(content['metadata'])
+                            else:
+                                metadata = content['metadata']
+                            st.json(metadata, expanded=False)
+                        except:
+                            st.info("No metadata available")
                 
                 # Edit interface
                 with st.expander(" Request Edits", expanded=False):
@@ -432,7 +455,7 @@ with tab3:
                                 edit_notes,
                                 st.session_state.get('user', 'admin')
                             )
-                            st.success("Sent back for AI revision!")
+                            st.success("Sent back for AI revision! In production, this would trigger AI regeneration.")
                             time.sleep(1)
                             st.rerun()
             
@@ -474,7 +497,7 @@ with tab3:
                         st.rerun()
                 
                 # Safety check
-                safety_check = system["safety"].check_content(content['content'])
+                safety_check = system["safety"].check_content(content_to_show)
                 if not safety_check["safe"]:
                     st.warning(" Safety flags detected")
                     for flag in safety_check["flags"]:
@@ -522,7 +545,7 @@ with tab4:
             with st.expander(f"{day.strftime('%A, %b %d')}"):
                 if day_content:
                     for content in day_content:
-                        st.write(f" {content['scheduled_time'].strftime('%H:%M')} - {content['platform']}")
+                        st.write(f"⏰ {content['scheduled_time'].strftime('%H:%M')} - {content['platform']}")
                         st.caption(content['topic'][:50])
                 else:
                     st.info("No content scheduled")
@@ -662,20 +685,4 @@ with tab5:
 
 # ========== FOOTER ==========
 st.divider()
-
-# Requirements checklist
-st.subheader(" Case Study Requirements Met")
-
-requirements = {
-    "AI Content Creation Agent": "✓ Grok API with platform-specific optimization",
-    "Client Media Upload": "✓ Multi-file upload with AI context extraction",
-    "Approval-First Workflow": "✓ Hard approval gate with approve/reject/edit",
-    "Automated Posting Logic": "✓ Scheduling with mock posting pipeline",
-    "Control & Safety Mechanisms": "✓ Emergency stop, manual mode, crisis mode",
-    "Documentation & Handover": "✓ Architecture overview in README"
-}
-
-for req, status in requirements.items():
-    st.caption(f"**{req}:** {status}")
-
-st.caption("Production AI Content Agent v1.0 | Built for Native AI Engineer Case Study")
+st.caption("AI Content Agent v1.0 | Human-in-the-Loop Approval System")
